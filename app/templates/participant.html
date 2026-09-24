@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ poll.title }}{% endblock %}
+{% block content %}
+<h1>{{ poll.title }}</h1>
+{% if poll.description %}<p class="lead">{{ poll.description }}</p>{% endif %}
+
+{% if request.query_params.get('saved') %}
+<div class="success">Dina svar är sparade.</div>
+{% endif %}
+
+<form method="post" class="card form">
+  <label>Ditt namn
+    <input name="name" required value="{{ participant.name if participant else '' }}" placeholder="T.ex. Thomas">
+  </label>
+
+  <h2>{% if poll.poll_type == 'hotel' %}Vilka nätter vill du boka?{% else %}När kan du?{% endif %}</h2>
+
+  {% for o in options %}
+  <div class="participant-option">
+    <input type="hidden" name="option_ids" value="{{ o.id }}">
+    {% if poll.poll_type == 'hotel' %}
+      <label class="checkline">
+        <input type="checkbox" name="answers" value="selected"
+               {% if existing.get(o.id) in ['selected','yes'] %}checked{% endif %}>
+        <strong>{{ o.date }}</strong>
+        <span>övernattning</span>
+      </label>
+    {% else %}
+      <div class="slot-title">
+        <strong>{{ o.date }}</strong>
+        <span>{{ o.start_time }}–{{ o.end_time }}</span>
+      </div>
+      <div class="choices">
+        {% for value, label in [('yes','Kan'),('maybe','Kanske'),('no','Kan inte')] %}
+        <label>
+          <input type="radio" name="answers" value="{{ value }}"
+                 {% if existing.get(o.id) == value %}checked{% endif %}>
+          {{ label }}
+        </label>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <p class="muted">Obs: För hotellvarianten skickas endast markerade nätter som valda.</p>
+  <button class="button" type="submit">Spara mina svar</button>
+</form>
+{% endblock %}

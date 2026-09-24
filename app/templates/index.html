@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Group Planner{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Planera tillsammans</h1>
+  <p>Hitta en gemensam tid eller samla in hotellnätter från en grupp.</p>
+  <a class="button" href="/admin/new">Skapa omröstning</a>
+</section>
+
+<div class="cards">
+  <div class="card">
+    <h2>🍽 Middag / tillgänglighet</h2>
+    <p>Välj flera datum och tider. Deltagarna markerar kan, kan inte eller kanske.</p>
+  </div>
+  <div class="card">
+    <h2>🏨 Hotell / resa</h2>
+    <p>Välj vilka nätter varje person vill ha och låt appen räkna kostnaden.</p>
+  </div>
+</div>
+{% endblock %}

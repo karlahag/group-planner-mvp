@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ poll.title }} – Admin{% endblock %}
+{% block content %}
+<h1>{{ poll.title }}</h1>
+<p class="lead">{{ poll.description }}</p>
+
+<div class="link-box">
+  <strong>Deltagarlänk</strong>
+  <input readonly value="{{ request.base_url.scheme }}://{{ request.base_url.netloc }}/p/{{ poll.participant_token }}"
+         onclick="this.select()">
+  <button class="button secondary" onclick="copyText(this.previousElementSibling)">Kopiera</button>
+</div>
+
+<div class="summary-grid">
+  <div class="stat"><span>Deltagare</span><strong>{{ participants|length }}</strong></div>
+  {% if poll.poll_type == 'hotel' %}
+  <div class="stat"><span>Personnätter</span><strong>{{ selected_person_nights }}</strong></div>
+  {% endif %}
+  {% if per_night_rate %}
+  <div class="stat"><span>Pris/personnatt</span><strong>{{ "%.2f"|format(per_night_rate) }} kr</strong></div>
+  {% endif %}
+</div>
+
+{% if poll.poll_type == 'hotel' %}
+<div class="card">
+  <h2>Hotellkostnad</h2>
+  <form method="post" action="/admin/{{ poll.admin_token }}/cost" class="inline-form">
+    <label>Total kostnad
+      <input name="total_cost" type="number" step="0.01" min="0"
+             value="{{ poll.total_cost if poll.total_cost is not none else '' }}">
+    </label>
+    <label>Fördelning
+      <select name="cost_mode">
+        <option value="per_night" {% if poll.cost_mode == 'per_night' %}selected{% endif %}>
+          Efter antal personnätter
+        </option>
+        <option value="equal_person" {% if poll.cost_mode == 'equal_person' %}selected{% endif %}>
+          Lika per person
+        </option>
+      </select>
+    </label>
+    <button class="button" type="submit">Uppdatera</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Resultat</h2>
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Datum</th>
+        {% if poll.poll_type == 'availability' %}<th>Tid</th>{% endif %}
+        {% for p in participants %}<th>{{ p.name }}</th>{% endfor %}
+        <th>Antal</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for o in options %}
+      <tr>
+        <td>{{ o.date }}</td>
+        {% if poll.poll_type == 'availability' %}<td>{{ o.start_time }}–{{ o.end_time }}</td>{% endif %}
+        {% for p in participants %}
+          {% set a = response_map.get((p.id, o.id)) %}
+          <td class="answer {{ a or '' }}">
+            {% if poll.poll_type == 'hotel' %}
+              {% if a in ['selected','yes'] %}✓{% else %}–{% endif %}
+            {% else %}
+              {% if a == 'yes' %}✓{% elif a == 'maybe' %}?{% elif a == 'no' %}✕{% else %}–{% endif %}
+            {% endif %}
+          </td>
+        {% endfor %}
+        <td><strong>{{ counts.get(o.id, 0) }}</strong></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+{% if poll.poll_type == 'hotel' %}
+<div class="card">
+  <h2>Kostnad per person</h2>
+  <table>
+    <thead><tr><th>Person</th><th>Nätter</th><th>Kostnad</th></tr></thead>
+    <tbody>
+    {% for p in participants %}
+      <tr>
+        <td>{{ p.name }}</td>
+        <td>{{ participant_costs[p.id].nights }}</td>
+        <td>
+          {% if participant_costs[p.id].cost is not none %}
+            <strong>{{ "%.2f"|format(participant_costs[p.id].cost) }} kr</strong>
+          {% else %}–
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<script>
+function copyText(input) {
+  navigator.clipboard.writeText(input.value);
+}
+</script>
+{% endblock %}

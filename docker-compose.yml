@@ -1,0 +1,11 @@
+services:
+  group-planner:
+    build: .
+    container_name: group-planner
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:////app/data/group_planner.db
+    volumes:
+      - ./data:/app/data

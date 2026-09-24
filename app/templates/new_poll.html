@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Ny omröstning{% endblock %}
+{% block content %}
+<h1>Skapa omröstning</h1>
+
+<form method="post" class="card form">
+  <label>Titel
+    <input name="title" required placeholder="T.ex. Middag i Stockholm">
+  </label>
+
+  <label>Beskrivning
+    <textarea name="description" rows="3" placeholder="Valfri information"></textarea>
+  </label>
+
+  <label>Typ
+    <select name="poll_type" id="poll_type" onchange="toggleType()">
+      <option value="availability">Middag / tillgänglighet</option>
+      <option value="hotel">Hotell / resa</option>
+    </select>
+  </label>
+
+  <h2>Datum och alternativ</h2>
+  <div id="options"></div>
+  <button type="button" class="button secondary" onclick="addOption()">+ Lägg till</button>
+
+  <div id="hotel-settings" class="hotel-settings hidden">
+    <h2>Hotellkostnad</h2>
+    <label>Total kostnad (SEK)
+      <input name="total_cost" type="number" step="0.01" min="0" placeholder="24000">
+    </label>
+    <label>Kostnadsmodell
+      <select name="cost_mode">
+        <option value="per_night">Fördela efter antal personnätter</option>
+        <option value="equal_person">Dela lika mellan deltagarna</option>
+      </select>
+    </label>
+  </div>
+
+  <button class="button" type="submit">Skapa</button>
+</form>
+
+<script>
+function toggleType() {
+  document.getElementById('hotel-settings').classList.toggle(
+    'hidden', document.getElementById('poll_type').value !== 'hotel'
+  );
+  document.querySelectorAll('.time-fields').forEach(x => {
+    x.classList.toggle('hidden', document.getElementById('poll_type').value === 'hotel');
+  });
+}
+function addOption(date='', start='', end='') {
+  const div = document.createElement('div');
+  div.className = 'option-row';
+  div.innerHTML = `
+    <input name="dates" type="date" value="${date}" required>
+    <span class="time-fields">
+      <input name="start_times" type="time" value="${start}">
+      <span>–</span>
+      <input name="end_times" type="time" value="${end}">
+    </span>
+    <button type="button" class="remove" onclick="this.parentElement.remove()">✕</button>
+  `;
+  document.getElementById('options').appendChild(div);
+  toggleType();
+}
+addOption();
+addOption();
+</script>
+{% endblock %}
