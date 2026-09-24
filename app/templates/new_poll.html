@@ -1,7 +1,11 @@
+
 {% extends "base.html" %}
 {% block title %}Ny omröstning{% endblock %}
 {% block content %}
-<h1>Skapa omröstning</h1>
+<div class="hero">
+  <h1>Skapa omröstning</h1>
+  <p>Välj typ och lägg sedan till de datum eller tider gruppen ska ta ställning till.</p>
+</div>
 
 <form method="post" class="card form">
   <label>Titel
@@ -14,14 +18,14 @@
 
   <label>Typ
     <select name="poll_type" id="poll_type" onchange="toggleType()">
-      <option value="availability">Middag / tillgänglighet</option>
-      <option value="hotel">Hotell / resa</option>
+      <option value="availability">🍽 Middag / tillgänglighet</option>
+      <option value="hotel">🏨 Hotell / resa</option>
     </select>
   </label>
 
   <h2>Datum och alternativ</h2>
   <div id="options"></div>
-  <button type="button" class="button secondary" onclick="addOption()">+ Lägg till</button>
+  <button type="button" class="button secondary" onclick="addOption()">+ Lägg till alternativ</button>
 
   <div id="hotel-settings" class="hotel-settings hidden">
     <h2>Hotellkostnad</h2>
@@ -36,17 +40,14 @@
     </label>
   </div>
 
-  <button class="button" type="submit">Skapa</button>
+  <button class="button" type="submit">Skapa omröstning</button>
 </form>
 
 <script>
 function toggleType() {
-  document.getElementById('hotel-settings').classList.toggle(
-    'hidden', document.getElementById('poll_type').value !== 'hotel'
-  );
-  document.querySelectorAll('.time-fields').forEach(x => {
-    x.classList.toggle('hidden', document.getElementById('poll_type').value === 'hotel');
-  });
+  const hotel = document.getElementById('poll_type').value === 'hotel';
+  document.getElementById('hotel-settings').classList.toggle('hidden', !hotel);
+  document.querySelectorAll('.time-fields').forEach(x => x.classList.toggle('hidden', hotel));
 }
 function addOption(date='', start='', end='') {
   const div = document.createElement('div');
@@ -63,7 +64,6 @@ function addOption(date='', start='', end='') {
   document.getElementById('options').appendChild(div);
   toggleType();
 }
-addOption();
-addOption();
+addOption(); addOption(); addOption();
 </script>
 {% endblock %}

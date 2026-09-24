@@ -1,50 +1,69 @@
+
 {% extends "base.html" %}
 {% block title %}{{ poll.title }}{% endblock %}
 {% block content %}
-<h1>{{ poll.title }}</h1>
-{% if poll.description %}<p class="lead">{{ poll.description }}</p>{% endif %}
+<div class="hero">
+  <h1>{{ poll.title }}</h1>
+  {% if poll.description %}<p class="lead">{{ poll.description }}</p>{% endif %}
+</div>
 
 {% if request.query_params.get('saved') %}
-<div class="success">Dina svar är sparade.</div>
+<div class="success">✓ Dina svar är sparade.</div>
 {% endif %}
 
-<form method="post" class="card form">
-  <label>Ditt namn
-    <input name="name" required value="{{ participant.name if participant else '' }}" placeholder="T.ex. Thomas">
-  </label>
+<form method="post" class="form">
+  <div class="card">
+    <label>Ditt namn
+      <input name="name" required value="{{ participant.name if participant else '' }}" placeholder="T.ex. Thomas">
+    </label>
+  </div>
 
-  <h2>{% if poll.poll_type == 'hotel' %}Vilka nätter vill du boka?{% else %}När kan du?{% endif %}</h2>
-
-  {% for o in options %}
-  <div class="participant-option">
-    {% if poll.poll_type == 'hotel' %}
-      <label class="checkline">
-        <input type="checkbox" name="answer_{{ o.id }}" value="selected"
-               {% if existing.get(o.id) in ['selected','yes'] %}checked{% endif %}>
-        <strong>{{ o.date }}</strong>
-        <span>övernattning</span>
-      </label>
-    {% else %}
+  {% if poll.poll_type == 'hotel' %}
+  <div class="card">
+    <div class="section-head">
+      <div>
+        <h2>Vilka nätter vill du ha hotell?</h2>
+        <div class="muted">Tryck på de nätter du behöver. Du kan ändra och spara igen.</div>
+      </div>
+    </div>
+    <div class="calendar">
+      {% for o in options %}
+      <div class="day {% if existing.get(o.id) in ['selected','yes'] %}selected{% endif %}">
+        <div class="dow">{{ o.date[8:10] }}/{{ o.date[5:7] }}</div>
+        <div class="date">{{ o.date }}</div>
+        <label>
+          <input type="checkbox" name="answer_{{ o.id }}" value="selected"
+                 {% if existing.get(o.id) in ['selected','yes'] %}checked{% endif %}
+                 onchange="this.closest('.day').classList.toggle('selected',this.checked)">
+          Övernattning
+        </label>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card">
+    <h2>När kan du?</h2>
+    {% for o in options %}
+    <div class="participant-option">
       <div class="slot-title">
         <strong>{{ o.date }}</strong>
-        <span>{{ o.start_time }}–{{ o.end_time }}</span>
+        <span class="slot-time">{{ o.start_time }}–{{ o.end_time }}</span>
       </div>
       <div class="choices">
-        {% for value, label in [('yes','Kan'),('maybe','Kanske'),('no','Kan inte')] %}
-        <label>
+        {% for value, label in [('yes','✓ Kan'),('maybe','? Kanske'),('no','✕ Kan inte')] %}
+        <label class="choice">
           <input type="radio" name="answer_{{ o.id }}" value="{{ value }}"
                  {% if existing.get(o.id) == value %}checked{% endif %}>
           {{ label }}
         </label>
         {% endfor %}
       </div>
-    {% endif %}
+    </div>
+    {% endfor %}
   </div>
-  {% endfor %}
-
-  {% if poll.poll_type == 'hotel' %}
-  <p class="muted">Markera alla nätter du vill ha hotell. Du kan ändra dina val och spara igen senare.</p>
   {% endif %}
+
   <button class="button" type="submit">Spara mina svar</button>
 </form>
 {% endblock %}

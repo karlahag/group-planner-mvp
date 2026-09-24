@@ -84,3 +84,12 @@ This is deliberately a small MVP. Before exposing it publicly, consider:
 - Fixed participant answer handling so each date/time/night has its own form field.
 - Hotel checkboxes now map correctly to their dates.
 - Added a small SVG favicon.
+
+
+## v3 UI improvements
+
+- Responsive mobile-first interface.
+- Calendar-style selection for hotel nights.
+- Cleaner admin dashboard with summary cards.
+- Clearer cost allocation presentation.
+- Improved participant form.
