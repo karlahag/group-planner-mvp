@@ -23,7 +23,7 @@ TEMPLATES = Environment(
 app = FastAPI(title="Group Planner")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
-APP_VERSION = "v9"
+APP_VERSION = "v10"
 
 @app.get("/health")
 def health():
@@ -87,6 +87,16 @@ def get_admin_poll(db: Session, token: str):
     return poll
 
 
+def get_admin_session_poll(db: Session, request: Request):
+    # The admin overview and creation page are intentionally not public.
+    # Opening a valid admin link establishes a lightweight admin session in
+    # a cookie. Participant pages never receive this cookie from the app.
+    token = request.cookies.get("group_planner_admin_token")
+    if not token:
+        raise HTTPException(403, "Admin access required")
+    return get_admin_poll(db, token)
+
+
 def get_participant(db: Session, token: str):
     return db.scalar(select(Participant).where(Participant.token == token))
 
@@ -101,16 +111,18 @@ def participant_url(request: Request, token: str) -> str:
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    return render("index.html")
+    return render("index.html", is_admin=False)
 
 
 @app.get("/admin/new", response_class=HTMLResponse)
-def new_poll():
-    return render("new_poll.html")
+def new_poll(request: Request, db: Session = Depends(get_db)):
+    get_admin_session_poll(db, request)
+    return render("new_poll.html", request=request, is_admin=True)
 
 
 @app.post("/admin/new")
 def create_poll(
+    request: Request,
     title: str = Form(...),
     description: str = Form(""),
     poll_type: str = Form(...),
@@ -123,6 +135,7 @@ def create_poll(
     cost_mode: str = Form("per_night"),
     db: Session = Depends(get_db),
 ):
+    get_admin_session_poll(db, request)
     if poll_type not in {"availability", "hotel"}:
         raise HTTPException(400, "Invalid poll type")
 
@@ -164,6 +177,7 @@ def create_poll(
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_list(request: Request, db: Session = Depends(get_db)):
+    get_admin_session_poll(db, request)
     polls = list(db.scalars(select(Poll).order_by(Poll.created_at.desc())))
     participant_counts = {}
     for poll in polls:
@@ -175,6 +189,7 @@ def admin_list(request: Request, db: Session = Depends(get_db)):
     return render(
         "admin_list.html",
         request=request,
+        is_admin=True,
         polls=polls,
         participant_counts=participant_counts,
     )
@@ -185,7 +200,9 @@ def delete_poll(token: str, db: Session = Depends(get_db)):
     poll = get_admin_poll(db, token)
     db.delete(poll)
     db.commit()
-    return RedirectResponse("/admin", status_code=303)
+    response = RedirectResponse("/", status_code=303)
+    response.delete_cookie("group_planner_admin_token")
+    return response
 
 
 @app.get("/admin/{token}", response_class=HTMLResponse)
@@ -230,9 +247,10 @@ def admin_view(request: Request, token: str, db: Session = Depends(get_db)):
         else None
     )
 
-    return render(
+    response = render(
         "admin.html",
         request=request,
+        is_admin=True,
         participant_url=participant_url(request, poll.participant_token),
         poll=poll,
         options=options,
@@ -243,6 +261,14 @@ def admin_view(request: Request, token: str, db: Session = Depends(get_db)):
         selected_person_nights=selected_person_nights,
         per_night_rate=per_night_rate,
     )
+    response.set_cookie(
+        "group_planner_admin_token",
+        poll.admin_token,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+    )
+    return response
 
 
 @app.get("/p/{token}", response_class=HTMLResponse)
@@ -276,6 +302,7 @@ def participant_view(request: Request, token: str, db: Session = Depends(get_db)
     return render(
         "participant.html",
         request=request,
+        is_admin=False,
         poll=poll,
         options=options,
         participant=participant,
@@ -296,14 +323,17 @@ async def submit_participant(
     if not submitted_name:
         raise HTTPException(400, "Name is required")
 
-    # If the URL is a personal token, always update that participant.
-    # If it is the shared poll link, reuse an existing participant with the
-    # same name instead of creating a duplicate. Names are unique per poll.
+    # A personal token is the only credential that can edit an existing
+    # participant. The shared invitation link may only be used to create a
+    # new participant. This prevents someone else with the invitation link
+    # from entering another person's name and changing their answers.
     participant = get_participant(db, token)
-    if participant is None:
-        participant = find_participant_by_name(db, poll.id, submitted_name)
 
     if participant is None:
+        existing = find_participant_by_name(db, poll.id, submitted_name)
+        if existing is not None:
+            raise HTTPException(409, "Namnet används redan i den här omröstningen. Använd din personliga deltagarlänk för att ändra dina svar.")
+
         participant = Participant(
             poll_id=poll.id,
             name=submitted_name,
@@ -312,6 +342,11 @@ async def submit_participant(
         db.add(participant)
         db.flush()
     else:
+        # Keep the participant identity tied to the personal token. The name
+        # can be corrected, but cannot collide with another participant.
+        existing = find_participant_by_name(db, poll.id, submitted_name)
+        if existing is not None and existing.id != participant.id:
+            raise HTTPException(409, "Namnet används redan i den här omröstningen.")
         participant.name = submitted_name
         db.execute(delete(Response).where(Response.participant_id == participant.id))
 
