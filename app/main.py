@@ -88,12 +88,11 @@ def get_admin_poll(db: Session, token: str):
 
 
 def get_admin_session_poll(db: Session, request: Request):
-    # The admin overview and creation page are intentionally not public.
-    # Opening a valid admin link establishes a lightweight admin session in
-    # a cookie. Participant pages never receive this cookie from the app.
+    # The admin overview and creation page are not public. A valid poll-specific
+    # admin token establishes a lightweight admin session in a cookie.
     token = request.cookies.get("group_planner_admin_token")
     if not token:
-        raise HTTPException(403, "Admin access required")
+        raise HTTPException(307, "Admin login required")
     return get_admin_poll(db, token)
 
 
@@ -114,9 +113,19 @@ def index(request: Request):
     return render("index.html", is_admin=False)
 
 
+@app.get("/admin/login")
+def admin_login(token: str, db: Session = Depends(get_db)):
+    poll = get_admin_poll(db, token)
+    response = RedirectResponse("/admin", status_code=303)
+    response.set_cookie("group_planner_admin_token", poll.admin_token, httponly=True, samesite="lax", secure=False)
+    return response
+
+
 @app.get("/admin/new", response_class=HTMLResponse)
 def new_poll(request: Request, db: Session = Depends(get_db)):
-    get_admin_session_poll(db, request)
+    token = request.cookies.get("group_planner_admin_token")
+    if not token or not db.scalar(select(Poll).where(Poll.admin_token == token)):
+        return RedirectResponse("/admin", status_code=303)
     return render("new_poll.html", request=request, is_admin=True)
 
 
@@ -177,7 +186,12 @@ def create_poll(
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_list(request: Request, db: Session = Depends(get_db)):
-    get_admin_session_poll(db, request)
+    token = request.cookies.get("group_planner_admin_token")
+    if not token or not db.scalar(select(Poll).where(Poll.admin_token == token)):
+        return HTMLResponse(
+            """<!doctype html><html lang=\"sv\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Admininloggning</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;max-width:520px;margin:60px auto;padding:24px}input{width:100%;padding:12px;box-sizing:border-box;margin:8px 0 16px}button{padding:12px 18px;border:0;border-radius:8px;cursor:pointer}</style></head><body><h1>Admin</h1><p>Öppna din personliga adminlänk för en omröstning, eller klistra in admin-token nedan.</p><form method=\"get\" action=\"/admin/login\"><input name=\"token\" placeholder=\"Admin-token\" required><button type=\"submit\">Logga in</button></form></body></html>""",
+            status_code=200,
+        )
     polls = list(db.scalars(select(Poll).order_by(Poll.created_at.desc())))
     participant_counts = {}
     for poll in polls:
