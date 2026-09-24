@@ -1,4 +1,4 @@
-# Group Planner
+# Group Planner – v2
 
 A small self-hosted group planning app for:
 
@@ -76,3 +76,11 @@ This is deliberately a small MVP. Before exposing it publicly, consider:
 - PostgreSQL instead of SQLite if usage grows
 - email/invitation integration
 - audit logging
+
+
+## v2 fixes
+
+- Fixed the admin page `request is undefined` error.
+- Fixed participant answer handling so each date/time/night has its own form field.
+- Hotel checkboxes now map correctly to their dates.
+- Added a small SVG favicon.

@@ -17,10 +17,9 @@
 
   {% for o in options %}
   <div class="participant-option">
-    <input type="hidden" name="option_ids" value="{{ o.id }}">
     {% if poll.poll_type == 'hotel' %}
       <label class="checkline">
-        <input type="checkbox" name="answers" value="selected"
+        <input type="checkbox" name="answer_{{ o.id }}" value="selected"
                {% if existing.get(o.id) in ['selected','yes'] %}checked{% endif %}>
         <strong>{{ o.date }}</strong>
         <span>övernattning</span>
@@ -33,7 +32,7 @@
       <div class="choices">
         {% for value, label in [('yes','Kan'),('maybe','Kanske'),('no','Kan inte')] %}
         <label>
-          <input type="radio" name="answers" value="{{ value }}"
+          <input type="radio" name="answer_{{ o.id }}" value="{{ value }}"
                  {% if existing.get(o.id) == value %}checked{% endif %}>
           {{ label }}
         </label>
@@ -43,7 +42,9 @@
   </div>
   {% endfor %}
 
-  <p class="muted">Obs: För hotellvarianten skickas endast markerade nätter som valda.</p>
+  {% if poll.poll_type == 'hotel' %}
+  <p class="muted">Markera alla nätter du vill ha hotell. Du kan ändra dina val och spara igen senare.</p>
+  {% endif %}
   <button class="button" type="submit">Spara mina svar</button>
 </form>
 {% endblock %}

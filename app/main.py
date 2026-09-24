@@ -109,7 +109,7 @@ def create_poll(
 
 
 @app.get("/admin/{token}", response_class=HTMLResponse)
-def admin_view(token: str, db: Session = Depends(get_db)):
+def admin_view(request: Request, token: str, db: Session = Depends(get_db)):
     poll = get_admin_poll(db, token)
     options = list(db.scalars(select(Option).where(Option.poll_id == poll.id).order_by(Option.date, Option.start_time)))
     participants = list(db.scalars(select(Participant).where(Participant.poll_id == poll.id).order_by(Participant.name)))
@@ -184,11 +184,10 @@ def participant_view(token: str, db: Session = Depends(get_db)):
 
 
 @app.post("/p/{token}")
-def submit_participant(
+async def submit_participant(
     token: str,
+    request: Request,
     name: str = Form(...),
-    option_ids: list[int] = Form([]),
-    answers: list[str] = Form([]),
     db: Session = Depends(get_db),
 ):
     poll = get_poll(db, token)
@@ -206,15 +205,16 @@ def submit_participant(
         participant.name = name.strip()
         db.execute(delete(Response).where(Response.participant_id == participant.id))
 
-    answer_by_option = {}
-    for oid, ans in zip(option_ids, answers):
-        if ans in {"yes", "no", "maybe", "selected"}:
-            answer_by_option[int(oid)] = ans
+    parsed = await request.form()
 
-    for oid, ans in answer_by_option.items():
-        option = db.scalar(select(Option).where(Option.id == oid, Option.poll_id == poll.id))
-        if option:
-            db.add(Response(participant_id=participant.id, option_id=oid, answer=ans))
+    for option in poll.options:
+        value = parsed.get(f"answer_{option.id}")
+        if value in {"yes", "no", "maybe", "selected"}:
+            db.add(Response(
+                participant_id=participant.id,
+                option_id=option.id,
+                answer=value,
+            ))
 
     db.commit()
     return RedirectResponse(f"/p/{participant.token}?saved=1", status_code=303)
