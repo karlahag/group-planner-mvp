@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .database import Base, engine, get_db
@@ -23,7 +23,7 @@ TEMPLATES = Environment(
 app = FastAPI(title="Group Planner")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
-APP_VERSION = "v7"
+APP_VERSION = "v8"
 
 @app.get("/health")
 def health():
@@ -48,12 +48,36 @@ def money(value):
 
 
 def get_poll(db: Session, token: str):
+    # Token can be the shared participant link, an individual participant
+    # token, or an admin token.
+    participant = get_participant(db, token)
+    if participant is not None:
+        poll = db.get(Poll, participant.poll_id)
+        if poll is not None:
+            return poll
+
     poll = db.scalar(select(Poll).where(Poll.participant_token == token))
     if poll is None:
         poll = db.scalar(select(Poll).where(Poll.admin_token == token))
     if not poll:
         raise HTTPException(404, "Poll not found")
     return poll
+
+
+def normalize_name(name: str) -> str:
+    return " ".join(name.strip().split())
+
+
+def find_participant_by_name(db: Session, poll_id: int, name: str):
+    # Names are unique within a poll, case-insensitively.
+    normalized = normalize_name(name).casefold()
+    participants = db.scalars(
+        select(Participant).where(Participant.poll_id == poll_id)
+    )
+    for participant in participants:
+        if normalize_name(participant.name).casefold() == normalized:
+            return participant
+    return None
 
 
 def get_admin_poll(db: Session, token: str):
@@ -123,6 +147,32 @@ def create_poll(
 
     db.commit()
     return RedirectResponse(f"/admin/{poll.admin_token}", status_code=303)
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_list(request: Request, db: Session = Depends(get_db)):
+    polls = list(db.scalars(select(Poll).order_by(Poll.created_at.desc())))
+    participant_counts = {}
+    for poll in polls:
+        participant_counts[poll.id] = db.scalar(
+            select(func.count(Participant.id))
+            .where(Participant.poll_id == poll.id)
+        ) or 0
+
+    return render(
+        "admin_list.html",
+        request=request,
+        polls=polls,
+        participant_counts=participant_counts,
+    )
+
+
+@app.post("/admin/{token}/delete")
+def delete_poll(token: str, db: Session = Depends(get_db)):
+    poll = get_admin_poll(db, token)
+    db.delete(poll)
+    db.commit()
+    return RedirectResponse("/admin", status_code=303)
 
 
 @app.get("/admin/{token}", response_class=HTMLResponse)
@@ -229,18 +279,27 @@ async def submit_participant(
     db: Session = Depends(get_db),
 ):
     poll = get_poll(db, token)
+    submitted_name = normalize_name(name)
+    if not submitted_name:
+        raise HTTPException(400, "Name is required")
 
+    # If the URL is a personal token, always update that participant.
+    # If it is the shared poll link, reuse an existing participant with the
+    # same name instead of creating a duplicate. Names are unique per poll.
     participant = get_participant(db, token)
+    if participant is None:
+        participant = find_participant_by_name(db, poll.id, submitted_name)
+
     if participant is None:
         participant = Participant(
             poll_id=poll.id,
-            name=name.strip(),
+            name=submitted_name,
             token=new_token(),
         )
         db.add(participant)
         db.flush()
     else:
-        participant.name = name.strip()
+        participant.name = submitted_name
         db.execute(delete(Response).where(Response.participant_id == participant.id))
 
     parsed = await request.form()

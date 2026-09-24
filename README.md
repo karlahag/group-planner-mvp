@@ -125,3 +125,11 @@ Fixed the participant-token redirect bug.
 After the first save, the app creates a personal `Participant.token` and redirects to it. The GET `/p/<token>` handler now recognizes both the shared poll participant token and the personal participant token, so saved answers remain accessible.
 
 Verify with `/health` and expect version `v7`.
+
+
+## v8
+
+- Adminsida `/admin` visar alla omröstningar med admin-/deltagarlänkar och möjlighet att radera.
+- Deltagarnamn är unika inom en omröstning (case-insensitive och normaliserade).
+- Personligt deltagartoken kan användas för att ändra tidigare svar utan att skapa en ny deltagare.
+- Om samma namn används från den gemensamma deltagarlänken uppdateras den befintliga deltagaren istället för att skapa en dubblett.

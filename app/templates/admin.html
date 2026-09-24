@@ -3,8 +3,18 @@
 {% block title %}{{ poll.title }} – Admin{% endblock %}
 {% block content %}
 <div class="hero">
-  <h1>{{ poll.title }}</h1>
-  {% if poll.description %}<p class="lead">{{ poll.description }}</p>{% endif %}
+  <div class="section-head">
+    <div>
+      <h1>{{ poll.title }}</h1>
+      {% if poll.description %}<p class="lead">{{ poll.description }}</p>{% endif %}
+    </div>
+    <div class="hero-actions">
+      <a class="button secondary" href="/admin">Alla omröstningar</a>
+      <form method="post" action="/admin/{{ poll.admin_token }}/delete" onsubmit="return confirm('Radera omröstningen och alla dess svar? Detta kan inte ångras.');">
+        <button class="button danger" type="submit">Radera omröstning</button>
+      </form>
+    </div>
+  </div>
 </div>
 
 <div class="link-box">

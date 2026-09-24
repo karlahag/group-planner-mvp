@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Omröstningar – Admin{% endblock %}
+{% block content %}
+<div class="hero">
+  <h1>Omröstningar</h1>
+  <p class="lead">Alla skapade omröstningar. Härifrån kan du öppna adminvyn eller radera gamla omröstningar.</p>
+</div>
+
+<div class="card">
+  {% if polls %}
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Omröstning</th>
+        <th>Typ</th>
+        <th>Skapad</th>
+        <th>Deltagare</th>
+        <th>Admin</th>
+        <th>Deltagarlänk</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for poll in polls %}
+      <tr>
+        <td>
+          <strong>{{ poll.title }}</strong>
+          {% if poll.description %}<div class="muted">{{ poll.description }}</div>{% endif %}
+        </td>
+        <td>{% if poll.poll_type == 'hotel' %}Hotell{% else %}Tillgänglighet{% endif %}</td>
+        <td>{{ poll.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ participant_counts[poll.id] }}</td>
+        <td><a class="button small" href="/admin/{{ poll.admin_token }}">Öppna</a></td>
+        <td><a href="{{ request.base_url }}p/{{ poll.participant_token }}" target="_blank">Öppna</a></td>
+        <td>
+          <form method="post" action="/admin/{{ poll.admin_token }}/delete" onsubmit="return confirm('Radera omröstningen \'{{ poll.title|e }}\' och alla dess svar? Detta kan inte ångras.');">
+            <button class="button danger small" type="submit">Radera</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+    <p class="muted">Det finns inga omröstningar ännu.</p>
+  {% endif %}
+</div>
+{% endblock %}

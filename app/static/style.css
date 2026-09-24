@@ -42,3 +42,11 @@ table{width:100%;border-collapse:collapse;min-width:650px;background:#fff}th,td{
 .actions{display:flex;gap:8px;flex-wrap:wrap}
 @media(max-width:800px){.summary-grid{grid-template-columns:repeat(2,1fr)}.cards{grid-template-columns:1fr}.option-row{grid-template-columns:1fr auto}.option-row .time-fields{grid-column:1/-1}.inline-form{grid-template-columns:1fr}.calendar{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:520px){.container{padding-top:22px}.hero h1{font-size:34px}.summary-grid{grid-template-columns:1fr 1fr}.link-box{grid-template-columns:1fr}.choices{grid-template-columns:1fr}.calendar{grid-template-columns:repeat(2,1fr)}}
+
+
+.topbar-actions, .hero-actions { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+.button.small { padding: 0.45rem 0.7rem; font-size: 0.9rem; }
+.button.danger { background: #b42318; color: white; border-color: #b42318; }
+.button.danger:hover { background: #8f1c13; border-color: #8f1c13; }
+.hero .section-head { align-items: flex-start; }
+@media (max-width: 700px) { .topbar-actions { width: 100%; justify-content: flex-end; } .hero-actions { width: 100%; } }
