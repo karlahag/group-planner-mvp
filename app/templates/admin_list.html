@@ -1,5 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Omröstningar – Admin{% endblock %}
+{% block title %}Omröstningar – Admin<script>
+  document.querySelectorAll('.local-time[data-utc]').forEach(el => {
+    const date = new Date(el.dataset.utc);
+    if (!Number.isNaN(date.getTime())) {
+      el.textContent = new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'short',
+        timeStyle: 'short'
+      }).format(date);
+    }
+  });
+</script>
+{% endblock %}
 {% block content %}
 <div class="hero">
   <h1>Omröstningar</h1>
@@ -29,7 +40,7 @@
           {% if poll.description %}<div class="muted">{{ poll.description }}</div>{% endif %}
         </td>
         <td>{% if poll.poll_type == 'hotel' %}Hotell{% else %}Tillgänglighet{% endif %}</td>
-        <td>{{ poll.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td><span class="local-time" data-utc="{{ poll.created_at.isoformat() }}Z">{{ poll.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</span></td>
         <td>{{ participant_counts[poll.id] }}</td>
         <td><a class="button small" href="/admin/{{ poll.admin_token }}">Öppna</a></td>
         <td><a href="{{ request.base_url }}p/{{ poll.participant_token }}" target="_blank">Öppna</a></td>
@@ -47,4 +58,15 @@
     <p class="muted">Det finns inga omröstningar ännu.</p>
   {% endif %}
 </div>
+<script>
+  document.querySelectorAll('.local-time[data-utc]').forEach(el => {
+    const date = new Date(el.dataset.utc);
+    if (!Number.isNaN(date.getTime())) {
+      el.textContent = new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'short',
+        timeStyle: 'short'
+      }).format(date);
+    }
+  });
+</script>
 {% endblock %}

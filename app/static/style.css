@@ -50,3 +50,7 @@ table{width:100%;border-collapse:collapse;min-width:650px;background:#fff}th,td{
 .button.danger:hover { background: #8f1c13; border-color: #8f1c13; }
 .hero .section-head { align-items: flex-start; }
 @media (max-width: 700px) { .topbar-actions { width: 100%; justify-content: flex-end; } .hero-actions { width: 100%; } }
+
+.date-range{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:end;max-width:760px}
+.date-range label{margin:10px 0}.date-arrow{padding-bottom:12px;color:var(--muted);font-size:22px}.hotel-settings p{margin-top:-6px}
+@media(max-width:600px){.date-range{grid-template-columns:1fr}.date-arrow{display:none}}

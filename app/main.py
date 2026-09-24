@@ -23,7 +23,7 @@ TEMPLATES = Environment(
 app = FastAPI(title="Group Planner")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
-APP_VERSION = "v8"
+APP_VERSION = "v9"
 
 @app.get("/health")
 def health():
@@ -115,6 +115,8 @@ def create_poll(
     description: str = Form(""),
     poll_type: str = Form(...),
     dates: list[str] = Form([]),
+    hotel_start_date: str = Form(""),
+    hotel_end_date: str = Form(""),
     start_times: list[str] = Form([]),
     end_times: list[str] = Form([]),
     total_cost: str = Form(""),
@@ -124,7 +126,18 @@ def create_poll(
     if poll_type not in {"availability", "hotel"}:
         raise HTTPException(400, "Invalid poll type")
 
-    clean_dates = [d.strip() for d in dates if d.strip()]
+    if poll_type == "hotel":
+        if not hotel_start_date.strip() or not hotel_end_date.strip():
+            raise HTTPException(400, "Start- och slutdatum krävs för hotell/resa")
+        if hotel_end_date <= hotel_start_date:
+            raise HTTPException(400, "Slutdatum måste vara efter startdatum")
+        from datetime import date, timedelta
+        start = date.fromisoformat(hotel_start_date)
+        end = date.fromisoformat(hotel_end_date)
+        clean_dates = [(start + timedelta(days=i)).isoformat() for i in range((end - start).days)]
+    else:
+        clean_dates = [d.strip() for d in dates if d.strip()]
+
     if not clean_dates:
         raise HTTPException(400, "At least one date/option is required")
 

@@ -127,9 +127,15 @@ After the first save, the app creates a personal `Participant.token` and redirec
 Verify with `/health` and expect version `v7`.
 
 
-## v8
+## v9
 
 - Adminsida `/admin` visar alla omröstningar med admin-/deltagarlänkar och möjlighet att radera.
 - Deltagarnamn är unika inom en omröstning (case-insensitive och normaliserade).
 - Personligt deltagartoken kan användas för att ändra tidigare svar utan att skapa en ny deltagare.
 - Om samma namn används från den gemensamma deltagarlänken uppdateras den befintliga deltagaren istället för att skapa en dubblett.
+
+
+## v9 changes
+- Hotel/resa uses startdatum + stoppdatum (utcheckning) instead of individual date rows.
+- All nights between the dates are generated automatically; the end date itself is not a hotel night.
+- Creation timestamps in the admin list are displayed in the browser's local timezone.
