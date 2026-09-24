@@ -22,6 +22,12 @@ TEMPLATES = Environment(
 app = FastAPI(title="Group Planner")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
+APP_VERSION = "v5"
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "version": APP_VERSION}
+
 Base.metadata.create_all(bind=engine)
 
 
@@ -41,7 +47,9 @@ def money(value):
 
 
 def get_poll(db: Session, token: str):
-    poll = db.scalar(select(Poll).where((Poll.admin_token == token) | (Poll.participant_token == token)))
+    poll = db.scalar(select(Poll).where(Poll.participant_token == token))
+    if poll is None:
+        poll = db.scalar(select(Poll).where(Poll.admin_token == token))
     if not poll:
         raise HTTPException(404, "Poll not found")
     return poll
@@ -56,6 +64,12 @@ def get_admin_poll(db: Session, token: str):
 
 def get_participant(db: Session, token: str):
     return db.scalar(select(Participant).where(Participant.token == token))
+
+
+def participant_url(request: Request, token: str) -> str:
+    # Build the URL from the incoming request so it works on localhost,
+    # a LAN IP, reverse proxy, and Synology without hard-coded hostnames.
+    return str(request.base_url).rstrip("/") + f"/p/{token}"
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -152,6 +166,8 @@ def admin_view(request: Request, token: str, db: Session = Depends(get_db)):
 
     return render(
         "admin.html",
+        request=request,
+        participant_url=participant_url(request, poll.participant_token),
         poll=poll,
         options=options,
         participants=participants,
@@ -164,7 +180,7 @@ def admin_view(request: Request, token: str, db: Session = Depends(get_db)):
 
 
 @app.get("/p/{token}", response_class=HTMLResponse)
-def participant_view(token: str, db: Session = Depends(get_db)):
+def participant_view(request: Request, token: str, db: Session = Depends(get_db)):
     poll = get_poll(db, token)
     participant = get_participant(db, token)
     options = list(db.scalars(select(Option).where(Option.poll_id == poll.id).order_by(Option.date, Option.start_time)))
@@ -175,6 +191,7 @@ def participant_view(token: str, db: Session = Depends(get_db)):
 
     return render(
         "participant.html",
+        request=request,
         poll=poll,
         options=options,
         participant=participant,

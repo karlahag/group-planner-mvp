@@ -93,3 +93,17 @@ This is deliberately a small MVP. Before exposing it publicly, consider:
 - Cleaner admin dashboard with summary cards.
 - Clearer cost allocation presentation.
 - Improved participant form.
+
+
+## v4
+Explicitly passes FastAPI Request into admin and participant Jinja templates.
+Use `/health` to verify the running container is v4.
+
+
+## v5 fixes
+
+- Participant poll-token lookup is explicit and robust.
+- Participant URL is constructed once on the server and passed to the admin template.
+- Copy-link works on normal HTTP/LAN setups where `navigator.clipboard` is unavailable, using a fallback.
+- The copy button gives visible feedback.
+- `/health` returns version `v5`.

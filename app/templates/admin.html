@@ -9,7 +9,7 @@
 
 <div class="link-box">
   <strong>Deltagarlänk</strong>
-  <input id="participant-link" readonly value="{{ request.base_url.scheme }}://{{ request.base_url.netloc }}/p/{{ poll.participant_token }}">
+  <input id="participant-link" readonly value="{{ participant_url }}">
   <button class="button secondary" onclick="copyText()">Kopiera</button>
 </div>
 
@@ -128,10 +128,30 @@
 {% endif %}
 
 <script>
-function copyText() {
+async function copyText() {
   const input = document.getElementById('participant-link');
-  input.select();
-  navigator.clipboard.writeText(input.value);
+  const value = input.value;
+
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(value);
+    } else {
+      input.focus();
+      input.select();
+      input.setSelectionRange(0, value.length);
+      const ok = document.execCommand('copy');
+      if (!ok) throw new Error('execCommand failed');
+    }
+    const button = document.querySelector('.link-box .button');
+    const original = button.textContent;
+    button.textContent = 'Kopierad ✓';
+    setTimeout(() => button.textContent = original, 1500);
+  } catch (err) {
+    input.focus();
+    input.select();
+    input.setSelectionRange(0, value.length);
+    alert('Kunde inte kopiera automatiskt. Länken är markerad – tryck Ctrl/Cmd+C.');
+  }
 }
 </script>
 {% endblock %}
