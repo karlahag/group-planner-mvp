@@ -116,3 +116,12 @@ Participant links use PUBLIC_BASE_URL so Docker/Uvicorn never publishes 0.0.0.0.
 Set it in `.env`, for example `PUBLIC_BASE_URL=http://192.168.1.100:8000`, then run `docker compose up --build`.
 
 `/health` should report version `v6`.
+
+
+## v7 fix
+
+Fixed the participant-token redirect bug.
+
+After the first save, the app creates a personal `Participant.token` and redirects to it. The GET `/p/<token>` handler now recognizes both the shared poll participant token and the personal participant token, so saved answers remain accessible.
+
+Verify with `/health` and expect version `v7`.

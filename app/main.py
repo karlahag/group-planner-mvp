@@ -23,7 +23,7 @@ TEMPLATES = Environment(
 app = FastAPI(title="Group Planner")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
-APP_VERSION = "v6"
+APP_VERSION = "v7"
 
 @app.get("/health")
 def health():
@@ -184,9 +184,27 @@ def admin_view(request: Request, token: str, db: Session = Depends(get_db)):
 
 @app.get("/p/{token}", response_class=HTMLResponse)
 def participant_view(request: Request, token: str, db: Session = Depends(get_db)):
-    poll = get_poll(db, token)
+    # A participant receives a personal token after their first save.
+    # Therefore the token may identify either:
+    #   1) the poll's shared participant token, or
+    #   2) an individual Participant.token.
     participant = get_participant(db, token)
-    options = list(db.scalars(select(Option).where(Option.poll_id == poll.id).order_by(Option.date, Option.start_time)))
+
+    if participant is not None:
+        poll = db.get(Poll, participant.poll_id)
+    else:
+        poll = db.scalar(select(Poll).where(Poll.participant_token == token))
+
+    if poll is None:
+        raise HTTPException(404, "Poll not found")
+
+    options = list(
+        db.scalars(
+            select(Option)
+            .where(Option.poll_id == poll.id)
+            .order_by(Option.date, Option.start_time)
+        )
+    )
 
     existing = {}
     if participant:
@@ -199,7 +217,7 @@ def participant_view(request: Request, token: str, db: Session = Depends(get_db)
         options=options,
         participant=participant,
         existing=existing,
-        participant_token=token,
+        participant_token=participant.token if participant else token,
     )
 
 
