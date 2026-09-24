@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Mina omröstningar{% endblock %}
+{% block content %}
+<div class="hero">
+  <h1>Mina omröstningar</h1>
+  <p class="lead">Ange samma e-postadress som du använde när du svarade.</p>
+</div>
+<form method="post" class="form">
+  <div class="card">
+    <label>E-postadress
+      <input type="email" name="email" required value="{{ email }}" placeholder="du@example.com" autocomplete="email">
+    </label>
+    <button class="button" type="submit">Visa mina omröstningar</button>
+  </div>
+</form>
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% if email and not participants and not error %}
+<div class="card"><p>Inga omröstningar hittades för den e-postadressen.</p></div>
+{% elif participants %}
+<div class="cards">
+  {% for p in participants %}
+  <div class="card">
+    <h2>{{ p.poll.title }}</h2>
+    {% if p.poll.description %}<p>{{ p.poll.description }}</p>{% endif %}
+    <p class="muted">{{ p.name }} · {{ p.email }}</p>
+    <a class="button" href="/p/{{ p.token }}">Ändra mina svar</a>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

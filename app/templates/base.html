@@ -10,7 +10,8 @@
 <body>
 <header class="topbar">
   <a href="/" class="brand">Group Planner</a>
-  {% if is_admin %}<div class="topbar-actions"><a href="/admin" class="button secondary">Omröstningar</a><a href="/admin/new" class="button secondary">Ny omröstning</a></div>{% endif %}
+  {% if app_version %}<span class="app-version">{{ app_version }}</span>{% endif %}
+  {% if is_admin %}<div class="topbar-actions"><a href="/admin" class="button secondary">Omröstningar</a><a href="/admin/new" class="button secondary">Ny omröstning</a></div>{% else %}<div class="topbar-actions"><a href="/mine" class="button secondary">Mina omröstningar</a></div>{% endif %}
 </header>
 <main class="container">
 {% block content %}{% endblock %}

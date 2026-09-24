@@ -54,3 +54,51 @@ table{width:100%;border-collapse:collapse;min-width:650px;background:#fff}th,td{
 .date-range{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:end;max-width:760px}
 .date-range label{margin:10px 0}.date-arrow{padding-bottom:12px;color:var(--muted);font-size:22px}.hotel-settings p{margin-top:-6px}
 @media(max-width:600px){.date-range{grid-template-columns:1fr}.date-arrow{display:none}}
+
+.participant-name{cursor:help}
+
+
+/* v14: hotel result matrix */
+.matrix-wrap { overflow-x: auto; max-width: 100%; }
+.hotel-matrix { min-width: max-content; }
+.hotel-matrix th, .hotel-matrix td { min-width: 82px; text-align: center; }
+.hotel-matrix .sticky-corner,
+.hotel-matrix .sticky-person {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  text-align: left;
+  min-width: 160px;
+  background: #f8fafc;
+  box-shadow: 2px 0 4px rgba(20,30,50,.06);
+}
+
+.hotel-matrix .sticky-corner {
+  top: 0;
+  z-index: 5;
+}
+
+.hotel-matrix .sticky-person {
+  font-weight: 700;
+}
+
+.hotel-matrix .hotel-date-header {
+  top: 0;
+  z-index: 4;
+  background: #f8fafc;
+  white-space: nowrap;
+}
+@media (max-width: 700px) {
+  .hotel-matrix th, .hotel-matrix td { min-width: 72px; }
+  .hotel-matrix .sticky-corner,
+  .hotel-matrix .sticky-person {
+    min-width: 140px;
+  }
+.app-version {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-left: 0.5rem;
+    align-self: center;
+  }
+}

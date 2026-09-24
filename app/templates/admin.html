@@ -63,36 +63,86 @@
     <div>
       <h2>Resultat</h2>
       {% if poll.poll_type == 'hotel' %}
-      <div class="muted">Varje kolumn visar en deltagare och varje rad en hotellnatt.</div>
+      <div class="muted">Varje rad visar en deltagare och varje kolumn en hotellnatt.</div>
       {% else %}
       <div class="muted">✓ = kan, ? = kanske, ✕ = kan inte.</div>
       {% endif %}
     </div>
   </div>
+{% if poll.poll_type == 'hotel' %}
+  <div class="table-wrap matrix-wrap">
+    <table class="result-matrix hotel-matrix">
+      <thead>
+        <tr>
+          <th class="sticky-corner">Person</th>
+          {% for o in options %}
+            <th class="hotel-date-header">{{ o.date }}</th>
+          {% endfor %}
+          <th>Antal</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for p in participants %}
+          <tr>
+            <th
+              class="sticky-person participant-name"
+              title="{{ p.email }}"
+              data-email="{{ p.email }}"
+            >{{ p.name }}</th>
+
+            {% for o in options %}
+              {% set a = response_map.get((p.id, o.id)) %}
+              <td class="answer {{ a or '' }}">
+                {% if a in ['selected', 'yes'] %}
+                  ✓
+                {% else %}
+                  –
+                {% endif %}
+              </td>
+            {% endfor %}
+
+            <td>
+              <strong>{{ participant_costs[p.id].nights }}</strong>
+            </td>
+          </tr>
+        {% endfor %}
+
+        <tr class="matrix-summary">
+          <th class="sticky-person">Antal</th>
+
+          {% for o in options %}
+            <td>
+              <strong>{{ counts.get(o.id, 0) }}</strong>
+            </td>
+          {% endfor %}
+
+          <td>
+            <strong>{{ selected_person_nights }}</strong>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
   <div class="table-wrap">
   <table>
     <thead>
       <tr>
         <th>Datum</th>
-        {% if poll.poll_type == 'availability' %}<th>Tid</th>{% endif %}
-        {% for p in participants %}<th>{{ p.name }}</th>{% endfor %}
+        <th>Tid</th>
+        {% for p in participants %}<th class="participant-name" title="{{ p.email }}">{{ p.name }}</th>{% endfor %}
         <th>Antal</th>
       </tr>
     </thead>
     <tbody>
     {% for o in options %}
       <tr>
-        <td>{{ o.date }}</td>
-        {% if poll.poll_type == 'availability' %}<td>{{ o.start_time }}–{{ o.end_time }}</td>{% endif %}
+        <td>{{ o.date }}</td><td>{{ o.start_time }}–{{ o.end_time }}</td>
         {% for p in participants %}
           {% set a = response_map.get((p.id, o.id)) %}
-          <td class="answer {{ a or '' }}">
-            {% if poll.poll_type == 'hotel' %}
-              {% if a in ['selected','yes'] %}✓{% else %}–{% endif %}
-            {% else %}
-              {% if a == 'yes' %}✓{% elif a == 'maybe' %}?{% elif a == 'no' %}✕{% else %}–{% endif %}
-            {% endif %}
-          </td>
+          <td class="answer {{ a or '' }}">{% if a == 'yes' %}✓{% elif a == 'maybe' %}?{% elif a == 'no' %}✕{% else %}–{% endif %}</td>
         {% endfor %}
         <td><strong>{{ counts.get(o.id, 0) }}</strong></td>
       </tr>
@@ -101,6 +151,7 @@
   </table>
   </div>
 </div>
+{% endif %}
 
 {% if poll.poll_type == 'hotel' %}
 <div class="card person-costs">
@@ -122,7 +173,7 @@
     <tbody>
     {% for p in participants %}
       <tr>
-        <td>{{ p.name }}</td>
+        <td class="participant-name" title="{{ p.email }}">{{ p.name }}</td>
         <td>{{ participant_costs[p.id].nights }}</td>
         <td>
           {% if participant_costs[p.id].cost is not none %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Admin – Group Planner{% endblock %}
+{% block content %}
+<div class="hero">
+  <h1>Admin</h1>
+  <p class="lead">Logga in för att administrera omröstningar.</p>
+</div>
+<div class="card" style="max-width:520px">
+  {% if error %}<div class="notice danger">{{ error }}</div>{% endif %}
+  <form method="post" action="/admin/login">
+    <label for="password">Administratörslösenord</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+    <button class="button" type="submit">Logga in</button>
+  </form>
+  <p class="muted" style="margin-top:1rem">Lösenordet konfigureras med <code>ADMIN_PASSWORD</code> i din miljöfil.</p>
+</div>
+{% endblock %}

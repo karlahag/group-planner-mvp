@@ -1,6 +1,8 @@
 from pathlib import Path
 import os
 from secrets import token_urlsafe
+import hmac
+import hashlib
 from collections import defaultdict
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -8,7 +10,7 @@ from fastapi import FastAPI, Request, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete, func, inspect, text
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .database import Base, engine, get_db
@@ -21,9 +23,13 @@ TEMPLATES = Environment(
 )
 
 app = FastAPI(title="Group Planner")
+@app.middleware("http")
+async def add_version_to_request(request: Request, call_next):
+    request.state.app_version = APP_VERSION
+    return await call_next(request)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
-APP_VERSION = "v10"
+APP_VERSION = "v14"
 
 @app.get("/health")
 def health():
@@ -31,8 +37,23 @@ def health():
 
 Base.metadata.create_all(bind=engine)
 
+# Lightweight SQLite migration for databases created before v13.
+def migrate_database():
+    if engine.url.get_backend_name() != "sqlite":
+        return
+    inspector = inspect(engine)
+    if "participants" not in inspector.get_table_names():
+        return
+    columns = {c["name"] for c in inspector.get_columns("participants")}
+    if "email" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE participants ADD COLUMN email VARCHAR(320) DEFAULT ''"))
+
+migrate_database()
+
 
 def render(template_name: str, **context):
+    context["app_version"] = APP_VERSION
     template = TEMPLATES.get_template(template_name)
     return HTMLResponse(template.render(**context))
 
@@ -47,9 +68,31 @@ def money(value):
     return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
+def normalize_name(name: str) -> str:
+    return " ".join(name.strip().split())
+
+
+def normalize_email(email: str) -> str:
+    return email.strip().casefold()
+
+
+def get_participant(db: Session, token: str):
+    return db.scalar(select(Participant).where(Participant.token == token))
+
+
+def find_participant_by_email(db: Session, poll_id: int, email: str):
+    normalized = normalize_email(email)
+    if not normalized:
+        return None
+    return db.scalar(
+        select(Participant).where(
+            Participant.poll_id == poll_id,
+            Participant.email == normalized,
+        )
+    )
+
+
 def get_poll(db: Session, token: str):
-    # Token can be the shared participant link, an individual participant
-    # token, or an admin token.
     participant = get_participant(db, token)
     if participant is not None:
         poll = db.get(Poll, participant.poll_id)
@@ -64,20 +107,28 @@ def get_poll(db: Session, token: str):
     return poll
 
 
-def normalize_name(name: str) -> str:
-    return " ".join(name.strip().split())
+def admin_password():
+    return os.getenv("ADMIN_PASSWORD", "").strip()
 
 
-def find_participant_by_name(db: Session, poll_id: int, name: str):
-    # Names are unique within a poll, case-insensitively.
-    normalized = normalize_name(name).casefold()
-    participants = db.scalars(
-        select(Participant).where(Participant.poll_id == poll_id)
+def make_admin_cookie_value():
+    password = admin_password()
+    if not password:
+        return ""
+    signature = hmac.new(password.encode(), b"group-planner-admin", hashlib.sha256).hexdigest()
+    return signature
+
+
+def is_admin_session(request: Request) -> bool:
+    expected = make_admin_cookie_value()
+    return bool(expected) and hmac.compare_digest(
+        request.cookies.get("group_planner_admin", ""), expected
     )
-    for participant in participants:
-        if normalize_name(participant.name).casefold() == normalized:
-            return participant
-    return None
+
+
+def require_admin(request: Request):
+    if not is_admin_session(request):
+        raise HTTPException(403, "Admin login required")
 
 
 def get_admin_poll(db: Session, token: str):
@@ -87,17 +138,20 @@ def get_admin_poll(db: Session, token: str):
     return poll
 
 
+def set_admin_cookie(response: RedirectResponse | HTMLResponse):
+    response.set_cookie(
+        "group_planner_admin",
+        make_admin_cookie_value(),
+        httponly=True,
+        samesite="lax",
+        secure=False,
+    )
+    return response
+
+
 def get_admin_session_poll(db: Session, request: Request):
-    # The admin overview and creation page are not public. A valid poll-specific
-    # admin token establishes a lightweight admin session in a cookie.
-    token = request.cookies.get("group_planner_admin_token")
-    if not token:
-        raise HTTPException(307, "Admin login required")
-    return get_admin_poll(db, token)
-
-
-def get_participant(db: Session, token: str):
-    return db.scalar(select(Participant).where(Participant.token == token))
+    require_admin(request)
+    return None
 
 
 def participant_url(request: Request, token: str) -> str:
@@ -110,22 +164,38 @@ def participant_url(request: Request, token: str) -> str:
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    return render("index.html", is_admin=False)
+    return render("index.html", request=request, is_admin=is_admin_session(request))
 
 
-@app.get("/admin/login")
-def admin_login(token: str, db: Session = Depends(get_db)):
-    poll = get_admin_poll(db, token)
+@app.get("/admin/login", response_class=HTMLResponse)
+def admin_login(request: Request):
+    if not admin_password():
+        raise HTTPException(500, "ADMIN_PASSWORD is not configured")
+    if is_admin_session(request):
+        return RedirectResponse("/admin", status_code=303)
+    return render("admin_login.html", request=request, is_admin=False)
+
+
+@app.post("/admin/login")
+def admin_login_post(request: Request, password: str = Form(...)):
+    configured = admin_password()
+    if not configured or not hmac.compare_digest(password, configured):
+        return render("admin_login.html", request=request, is_admin=False, error="Fel lösenord")
     response = RedirectResponse("/admin", status_code=303)
-    response.set_cookie("group_planner_admin_token", poll.admin_token, httponly=True, samesite="lax", secure=False)
-    return response
+    return set_admin_cookie(response)
+
+
+@app.get("/admin/login/{token}")
+def admin_login_by_token(token: str, db: Session = Depends(get_db)):
+    get_admin_poll(db, token)
+    response = RedirectResponse("/admin", status_code=303)
+    return set_admin_cookie(response)
 
 
 @app.get("/admin/new", response_class=HTMLResponse)
 def new_poll(request: Request, db: Session = Depends(get_db)):
-    token = request.cookies.get("group_planner_admin_token")
-    if not token or not db.scalar(select(Poll).where(Poll.admin_token == token)):
-        return RedirectResponse("/admin", status_code=303)
+    if not is_admin_session(request):
+        return RedirectResponse("/admin/login", status_code=303)
     return render("new_poll.html", request=request, is_admin=True)
 
 
@@ -175,10 +245,10 @@ def create_poll(
     db.add(poll)
     db.flush()
 
-    for i, date in enumerate(clean_dates):
+    for i, option_date in enumerate(clean_dates):
         st = start_times[i] if i < len(start_times) and start_times[i] else None
         et = end_times[i] if i < len(end_times) and end_times[i] else None
-        db.add(Option(poll_id=poll.id, date=date, start_time=st, end_time=et))
+        db.add(Option(poll_id=poll.id, date=option_date, start_time=st, end_time=et))
 
     db.commit()
     return RedirectResponse(f"/admin/{poll.admin_token}", status_code=303)
@@ -186,41 +256,37 @@ def create_poll(
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_list(request: Request, db: Session = Depends(get_db)):
-    token = request.cookies.get("group_planner_admin_token")
-    if not token or not db.scalar(select(Poll).where(Poll.admin_token == token)):
-        return HTMLResponse(
-            """<!doctype html><html lang=\"sv\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Admininloggning</title><style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;max-width:520px;margin:60px auto;padding:24px}input{width:100%;padding:12px;box-sizing:border-box;margin:8px 0 16px}button{padding:12px 18px;border:0;border-radius:8px;cursor:pointer}</style></head><body><h1>Admin</h1><p>Öppna din personliga adminlänk för en omröstning, eller klistra in admin-token nedan.</p><form method=\"get\" action=\"/admin/login\"><input name=\"token\" placeholder=\"Admin-token\" required><button type=\"submit\">Logga in</button></form></body></html>""",
-            status_code=200,
-        )
+    if not is_admin_session(request):
+        return RedirectResponse("/admin/login", status_code=303)
     polls = list(db.scalars(select(Poll).order_by(Poll.created_at.desc())))
     participant_counts = {}
     for poll in polls:
         participant_counts[poll.id] = db.scalar(
-            select(func.count(Participant.id))
-            .where(Participant.poll_id == poll.id)
+            select(func.count(Participant.id)).where(Participant.poll_id == poll.id)
         ) or 0
-
     return render(
         "admin_list.html",
         request=request,
         is_admin=True,
         polls=polls,
         participant_counts=participant_counts,
+        app_version=APP_VERSION,
     )
 
 
 @app.post("/admin/{token}/delete")
-def delete_poll(token: str, db: Session = Depends(get_db)):
+def delete_poll(request: Request, token: str, db: Session = Depends(get_db)):
+    require_admin(request)
     poll = get_admin_poll(db, token)
     db.delete(poll)
     db.commit()
-    response = RedirectResponse("/", status_code=303)
-    response.delete_cookie("group_planner_admin_token")
-    return response
+    return RedirectResponse("/admin", status_code=303)
 
 
 @app.get("/admin/{token}", response_class=HTMLResponse)
 def admin_view(request: Request, token: str, db: Session = Depends(get_db)):
+    if not is_admin_session(request):
+        get_admin_poll(db, token)
     poll = get_admin_poll(db, token)
     options = list(db.scalars(select(Option).where(Option.poll_id == poll.id).order_by(Option.date, Option.start_time)))
     participants = list(db.scalars(select(Participant).where(Participant.poll_id == poll.id).order_by(Participant.name)))
@@ -233,7 +299,6 @@ def admin_view(request: Request, token: str, db: Session = Depends(get_db)):
     counts = defaultdict(int)
     selected_person_nights = 0
     participant_costs = {}
-
     for p in participants:
         selected = sum(1 for o in options if response_map.get((p.id, o.id)) in {"selected", "yes"})
         participant_costs[p.id] = {"nights": selected, "cost": None}
@@ -249,9 +314,7 @@ def admin_view(request: Request, token: str, db: Session = Depends(get_db)):
             for p in participants:
                 participant_costs[p.id]["cost"] = money(share)
 
-    for r in db.scalars(
-        select(Response).join(Participant).where(Participant.poll_id == poll.id)
-    ):
+    for r in db.scalars(select(Response).join(Participant).where(Participant.poll_id == poll.id)):
         if r.answer in {"selected", "yes"}:
             counts[r.option_id] += 1
 
@@ -275,24 +338,34 @@ def admin_view(request: Request, token: str, db: Session = Depends(get_db)):
         selected_person_nights=selected_person_nights,
         per_night_rate=per_night_rate,
     )
-    response.set_cookie(
-        "group_planner_admin_token",
-        poll.admin_token,
-        httponly=True,
-        samesite="lax",
-        secure=False,
-    )
+    set_admin_cookie(response)
     return response
+
+
+@app.get("/mine", response_class=HTMLResponse)
+def mine(request: Request):
+    return render("mine.html", request=request, is_admin=False, error=None, participants=[], email="")
+
+
+@app.post("/mine", response_class=HTMLResponse)
+def mine_post(request: Request, email: str = Form(...), db: Session = Depends(get_db)):
+    normalized = normalize_email(email)
+    if not normalized or "@" not in normalized:
+        return render("mine.html", request=request, is_admin=False, error="Ange en giltig e-postadress.", participants=[], email=email)
+
+    participants = list(
+        db.scalars(
+            select(Participant)
+            .where(Participant.email == normalized)
+            .order_by(Participant.id.desc())
+        )
+    )
+    return render("mine.html", request=request, is_admin=False, error=None, participants=participants, email=normalized)
 
 
 @app.get("/p/{token}", response_class=HTMLResponse)
 def participant_view(request: Request, token: str, db: Session = Depends(get_db)):
-    # A participant receives a personal token after their first save.
-    # Therefore the token may identify either:
-    #   1) the poll's shared participant token, or
-    #   2) an individual Participant.token.
     participant = get_participant(db, token)
-
     if participant is not None:
         poll = db.get(Poll, participant.poll_id)
     else:
@@ -301,17 +374,8 @@ def participant_view(request: Request, token: str, db: Session = Depends(get_db)
     if poll is None:
         raise HTTPException(404, "Poll not found")
 
-    options = list(
-        db.scalars(
-            select(Option)
-            .where(Option.poll_id == poll.id)
-            .order_by(Option.date, Option.start_time)
-        )
-    )
-
-    existing = {}
-    if participant:
-        existing = {r.option_id: r.answer for r in participant.responses}
+    options = list(db.scalars(select(Option).where(Option.poll_id == poll.id).order_by(Option.date, Option.start_time)))
+    existing = {r.option_id: r.answer for r in participant.responses} if participant else {}
 
     return render(
         "participant.html",
@@ -330,42 +394,47 @@ async def submit_participant(
     token: str,
     request: Request,
     name: str = Form(...),
+    email: str = Form(...),
     db: Session = Depends(get_db),
 ):
     poll = get_poll(db, token)
     submitted_name = normalize_name(name)
+    submitted_email = normalize_email(email)
     if not submitted_name:
         raise HTTPException(400, "Name is required")
+    if not submitted_email or "@" not in submitted_email:
+        raise HTTPException(400, "A valid email address is required")
 
-    # A personal token is the only credential that can edit an existing
-    # participant. The shared invitation link may only be used to create a
-    # new participant. This prevents someone else with the invitation link
-    # from entering another person's name and changing their answers.
     participant = get_participant(db, token)
 
     if participant is None:
-        existing = find_participant_by_name(db, poll.id, submitted_name)
-        if existing is not None:
-            raise HTTPException(409, "Namnet används redan i den här omröstningen. Använd din personliga deltagarlänk för att ändra dina svar.")
-
-        participant = Participant(
-            poll_id=poll.id,
-            name=submitted_name,
-            token=new_token(),
-        )
-        db.add(participant)
-        db.flush()
+        # Shared invitation: email identifies an existing participant in this poll.
+        participant = find_participant_by_email(db, poll.id, submitted_email)
+        if participant is None:
+            participant = Participant(
+                poll_id=poll.id,
+                name=submitted_name,
+                email=submitted_email,
+                token=new_token(),
+            )
+            db.add(participant)
+            db.flush()
+        else:
+            participant.name = submitted_name
     else:
-        # Keep the participant identity tied to the personal token. The name
-        # can be corrected, but cannot collide with another participant.
-        existing = find_participant_by_name(db, poll.id, submitted_name)
-        if existing is not None and existing.id != participant.id:
-            raise HTTPException(409, "Namnet används redan i den här omröstningen.")
+        # Personal token: only that participant can be edited. Keep email as identity.
+        other = find_participant_by_email(db, poll.id, submitted_email)
+        if other is not None and other.id != participant.id:
+            raise HTTPException(409, "E-postadressen används redan i den här omröstningen.")
         participant.name = submitted_name
+        participant.email = submitted_email
+        db.execute(delete(Response).where(Response.participant_id == participant.id))
+
+    # If an existing participant was found through the shared link, replace their answers.
+    if participant.id is not None:
         db.execute(delete(Response).where(Response.participant_id == participant.id))
 
     parsed = await request.form()
-
     for option in poll.options:
         value = parsed.get(f"answer_{option.id}")
         if value in {"yes", "no", "maybe", "selected"}:
@@ -381,11 +450,13 @@ async def submit_participant(
 
 @app.post("/admin/{token}/cost")
 def update_cost(
+    request: Request,
     token: str,
     total_cost: str = Form(""),
     cost_mode: str = Form("per_night"),
     db: Session = Depends(get_db),
 ):
+    require_admin(request)
     poll = get_admin_poll(db, token)
     poll.total_cost = float(total_cost) if total_cost.strip() else None
     poll.cost_mode = cost_mode if cost_mode in {"per_night", "equal_person"} else "per_night"

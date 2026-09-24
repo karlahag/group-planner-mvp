@@ -139,3 +139,40 @@ Verify with `/health` and expect version `v7`.
 - Hotel/resa uses startdatum + stoppdatum (utcheckning) instead of individual date rows.
 - All nights between the dates are generated automatically; the end date itself is not a hotel night.
 - Creation timestamps in the admin list are displayed in the browser's local timezone.
+
+## Admin login (v14)
+
+Admin access is now protected by one global password configured with `ADMIN_PASSWORD` in `.env`.
+
+Example `.env`:
+
+```env
+PUBLIC_BASE_URL=http://localhost:8000
+ADMIN_PASSWORD=choose-a-password
+```
+
+Open `http://localhost:8000/admin` and log in with that password. Existing per-poll admin links continue to work and bootstrap the admin session.
+
+Participants do not see the admin navigation or the list of polls.
+
+
+## v14 – participant identity
+- Participant email is required.
+- Email is normalized and used as the unique participant identifier within each poll.
+- Names are display names only; duplicate names are allowed.
+- `/mine` lets a participant enter their email and see only their own participation records.
+- No email messages, magic links, or passwords are used for participants.
+- Personal participant tokens remain the actual edit links.
+- Existing SQLite databases are migrated automatically by adding the `participants.email` column.
+
+
+## v14
+- Admin hotellmatris: hover over participant name to see email address.
+- Email remains hidden from the main table unless the admin hovers over a participant name.
+
+
+## v14 – hotel admin matrix
+- Hotel results use nights as rows and participants as columns.
+- The matrix scrolls horizontally when there are many participants.
+- Participant names remain visible in the header while scrolling vertically.
+- Admins can hover participant names to see the email address.

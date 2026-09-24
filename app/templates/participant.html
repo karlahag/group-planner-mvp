@@ -8,13 +8,17 @@
 </div>
 
 {% if request.query_params.get('saved') %}
-<div class="success">✓ Dina svar är sparade.</div>
+<div class="success">✓ Dina svar är sparade. <a href="/mine">Visa mina omröstningar</a></div>
 {% endif %}
 
 <form method="post" class="form">
   <div class="card">
     <label>Ditt namn
       <input name="name" required value="{{ participant.name if participant else '' }}" placeholder="T.ex. Thomas">
+    </label>
+    <label>E-postadress
+      <input type="email" name="email" required value="{{ participant.email if participant else '' }}" placeholder="du@example.com" autocomplete="email">
+      <div class="muted">E-postadressen används som din unika identifierare i omröstningen.</div>
     </label>
   </div>
 

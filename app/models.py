@@ -37,6 +37,7 @@ class Participant(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     poll_id: Mapped[int] = mapped_column(ForeignKey("polls.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(100))
+    email: Mapped[str] = mapped_column(String(320), default="", index=True)
     token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
 
     poll = relationship("Poll", back_populates="participants")

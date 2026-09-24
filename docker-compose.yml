@@ -8,5 +8,6 @@ services:
     environment:
       DATABASE_URL: sqlite:////app/data/group_planner.db
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-this-password}
     volumes:
       - ./data:/app/data
