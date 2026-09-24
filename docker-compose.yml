@@ -7,5 +7,6 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: sqlite:////app/data/group_planner.db
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
     volumes:
       - ./data:/app/data

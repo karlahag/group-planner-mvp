@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 from secrets import token_urlsafe
 from collections import defaultdict
 from decimal import Decimal, ROUND_HALF_UP
@@ -22,7 +23,7 @@ TEMPLATES = Environment(
 app = FastAPI(title="Group Planner")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
-APP_VERSION = "v5"
+APP_VERSION = "v6"
 
 @app.get("/health")
 def health():
@@ -67,9 +68,11 @@ def get_participant(db: Session, token: str):
 
 
 def participant_url(request: Request, token: str) -> str:
-    # Build the URL from the incoming request so it works on localhost,
-    # a LAN IP, reverse proxy, and Synology without hard-coded hostnames.
-    return str(request.base_url).rstrip("/") + f"/p/{token}"
+    base = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if not base:
+        base = str(request.base_url).rstrip("/")
+        base = base.replace("://0.0.0.0", "://localhost", 1)
+    return f"{base}/p/{token}"
 
 
 @app.get("/", response_class=HTMLResponse)

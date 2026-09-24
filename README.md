@@ -107,3 +107,12 @@ Use `/health` to verify the running container is v4.
 - Copy-link works on normal HTTP/LAN setups where `navigator.clipboard` is unavailable, using a fallback.
 - The copy button gives visible feedback.
 - `/health` returns version `v5`.
+
+
+## v6
+
+Participant links use PUBLIC_BASE_URL so Docker/Uvicorn never publishes 0.0.0.0.
+
+Set it in `.env`, for example `PUBLIC_BASE_URL=http://192.168.1.100:8000`, then run `docker compose up --build`.
+
+`/health` should report version `v6`.
