@@ -22,14 +22,15 @@ TEMPLATES = Environment(
     autoescape=select_autoescape(["html", "xml"])
 )
 
+APP_VERSION = "v14"
+
 app = FastAPI(title="Group Planner")
+print(f"Starting Group Planner {APP_VERSION}")
 @app.middleware("http")
 async def add_version_to_request(request: Request, call_next):
     request.state.app_version = APP_VERSION
     return await call_next(request)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
-
-APP_VERSION = "v14"
 
 @app.get("/health")
 def health():
