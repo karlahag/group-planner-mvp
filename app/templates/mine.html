@@ -8,7 +8,7 @@
 <form method="post" class="form">
   <div class="card">
     <label>E-postadress
-      <input type="email" name="email" required value="{{ email }}" placeholder="du@example.com" autocomplete="email">
+      <input type="text" inputmode="email" name="email" required value="{{ email }}" placeholder="du@example.com" autocomplete="email">
     </label>
     <button class="button" type="submit">Visa mina omröstningar</button>
   </div>
@@ -16,14 +16,81 @@
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
 {% if email and not participants and not error %}
 <div class="card"><p>Inga omröstningar hittades för den e-postadressen.</p></div>
-{% elif participants %}
-<div class="cards">
-  {% for p in participants %}
-  <div class="card">
-    <h2>{{ p.poll.title }}</h2>
-    {% if p.poll.description %}<p>{{ p.poll.description }}</p>{% endif %}
-    <p class="muted">{{ p.name }} · {{ p.email }}</p>
-    <a class="button" href="/p/{{ p.token }}">Ändra mina svar</a>
+{% elif mine_items %}
+<div class="cards mine-cards">
+  {% for item in mine_items %}
+  {% set p = item.participant %}
+  {% set poll = item.poll %}
+  {% set options = item.options %}
+  {% set response_map = item.response_map %}
+  <div class="card mine-card">
+    <div class="section-head">
+      <div>
+        <h2>{{ poll.title }}</h2>
+        {% if poll.description %}<p>{{ description_html(poll.description) }}</p>{% endif %}
+        <p class="muted">{{ p.name }} · {{ p.email }}</p>
+      </div>
+      {% if p.saved_at %}
+      <span class="saved-badge">✓ Sparad</span>
+      {% endif %}
+    </div>
+
+    {% if poll.poll_type == 'hotel' %}
+    <div class="mine-summary">
+      <h3>Mina hotellnätter</h3>
+      <div class="calendar">
+        {% for o in options %}
+        <div class="day locked-option {% if response_map.get(o.id) in ['selected','yes'] %}selected{% else %}unselected{% endif %}">
+          <div class="hotel-night-date">{{ format_hotel_night_sv(o.date) }}</div>
+          {% if response_map.get(o.id) in ['selected','yes'] %}
+            <div class="selected-mark">✓ Övernattning</div>
+          {% else %}
+            <div class="muted">Ej vald</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <div class="mine-summary">
+      <div class="section-head">
+        <div>
+          <h3>Resultat – {{ poll.title }}</h3>
+          <div class="muted">Här ser du allas svar. ✅ = kan, ❌ = kan inte.</div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="mine-result-table">
+          <thead>
+            <tr>
+              <th>Person</th>
+              {% for o in options %}<th class="{% if poll.booking_option_id == o.id %}booking-selected-column{% endif %}">{{ format_date_sv(o.date) }}<br><span class="muted">{{ o.start_time }}–{{ o.end_time }}</span>{% if poll.booking_option_id == o.id %}<br><span class="booking-mark">✓ Bokas</span>{% endif %}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+          {% for rp in item.result_participants %}
+            <tr>
+              <th class="participant-result-name">{{ rp.name }}{% if rp.id == p.id %} <span class="muted">(du)</span>{% endif %}</th>
+              {% for o in options %}
+                {% set a = item.result_response_map.get((rp.id, o.id)) %}
+                <td class="answer {{ a or '' }} {% if poll.booking_option_id == o.id %}booking-selected-column{% endif %}">{% if a == 'yes' %}✅{% elif a == 'no' %}❌{% else %}–{% endif %}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="mine-actions">
+      <a class="button" href="/p/{{ p.token }}">Visa omröstningen</a>
+      {% if poll.locked %}
+      <span class="button secondary disabled-button">Låst för ändring, kontakta admin</span>
+      {% else %}
+      <a class="button secondary" href="/p/{{ p.token }}?edit=1">Ändra mina val</a>
+      {% endif %}
+    </div>
   </div>
   {% endfor %}
 </div>

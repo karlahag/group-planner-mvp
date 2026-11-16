@@ -6,13 +6,14 @@
   <p>Välj typ och lägg sedan till de datum eller tider gruppen ska ta ställning till.</p>
 </div>
 
-<form method="post" class="card form" id="poll-form">
+<form method="post" class="card form" id="poll-form" lang="sv-SE">
   <label>Titel
     <input name="title" required placeholder="T.ex. Middag i Stockholm">
   </label>
 
   <label>Beskrivning
     <textarea name="description" rows="3" placeholder="Valfri information"></textarea>
+    <small class="muted description-help">Stöd för länkar: https://exempel.se eller [länktext](https://exempel.se). Radbrytningar bevaras. Formatering: **fetstil**, *kursiv* och `kod`.</small>
   </label>
 
   <label>Typ
@@ -26,19 +27,42 @@
     <h2>Datum och tider</h2>
     <div id="options"></div>
     <button type="button" class="button secondary" onclick="addOption()">+ Lägg till alternativ</button>
+    <div class="calendar-picker card-lite hidden" id="availability-calendar-picker">
+      <div class="calendar-toolbar">
+        <button type="button" class="button secondary small" id="availability-calendar-prev">‹</button>
+        <strong id="availability-calendar-month"></strong>
+        <button type="button" class="button secondary small" id="availability-calendar-next">›</button>
+      </div>
+      <div class="calendar-weekdays">
+        <span>Mån</span><span>Tis</span><span>Ons</span><span>Tor</span><span>Fre</span><span>Lör</span><span>Sön</span>
+      </div>
+      <div class="calendar-grid" id="availability-calendar"></div>
+    </div>
   </div>
 
   <div id="hotel-dates" class="hotel-settings hidden">
     <h2>Resedatum</h2>
     <p class="muted">Välj incheckningsdag och utcheckningsdag. Alla nätter mellan datumen läggs automatiskt till.</p>
-    <div class="date-range">
+    <div class="date-range-fields">
       <label>Startdatum / incheckning
-        <input id="hotel_start_date" name="hotel_start_date" type="date">
+        <input id="hotel_start_date" name="hotel_start_date" type="text" inputmode="numeric" placeholder="2026-09-26" readonly>
       </label>
       <span class="date-arrow">→</span>
       <label>Stoppdatum / utcheckning
-        <input id="hotel_end_date" name="hotel_end_date" type="date">
+        <input id="hotel_end_date" name="hotel_end_date" type="text" inputmode="numeric" placeholder="2026-09-27" readonly>
       </label>
+    </div>
+    <div class="calendar-picker card-lite" id="hotel-calendar-picker">
+      <div class="calendar-toolbar">
+        <button type="button" class="button secondary small" id="calendar-prev">‹</button>
+        <strong id="calendar-month"></strong>
+        <button type="button" class="button secondary small" id="calendar-next">›</button>
+      </div>
+      <div class="calendar-weekdays">
+        <span>Mån</span><span>Tis</span><span>Ons</span><span>Tor</span><span>Fre</span><span>Lör</span><span>Sön</span>
+      </div>
+      <div class="calendar-grid" id="hotel-calendar"></div>
+      <div class="muted calendar-help">Klicka på incheckningsdag och sedan på utcheckningsdag.</div>
     </div>
     <div id="hotel-night-preview" class="muted"></div>
   </div>
@@ -70,6 +94,8 @@ function toggleType() {
   document.querySelectorAll('#options input[name="start_times"], #options input[name="end_times"]').forEach(x => x.disabled = hotel);
   document.getElementById('hotel_start_date').disabled = !hotel;
   document.getElementById('hotel_end_date').disabled = !hotel;
+  document.getElementById('hotel-calendar-picker').classList.toggle('hidden', !hotel);
+  if (!hotel) renderAvailabilityCalendar();
   updateHotelPreview();
 }
 
@@ -77,22 +103,160 @@ function addOption(date='', start='', end='') {
   const div = document.createElement('div');
   div.className = 'option-row';
   div.innerHTML = `
-    <input name="dates" type="date" value="${date}" required>
+    <div class="date-picker-field">
+      <input name="dates" type="hidden" value="${date}">
+      <button type="button" class="date-picker-button${date ? ' has-value' : ''}" onclick="openAvailabilityCalendar(this)">${date || 'Välj datum'}</button>
+    </div>
     <span class="time-fields">
       <input name="start_times" type="time" value="${start}">
       <span>–</span>
       <input name="end_times" type="time" value="${end}">
     </span>
-    <button type="button" class="remove" onclick="this.parentElement.remove()">✕</button>
+    <button type="button" class="remove" onclick="this.parentElement.remove(); if (activeAvailabilityButton === this.parentElement.querySelector('.date-picker-button')) closeAvailabilityCalendar();">✕</button>
   `;
   document.getElementById('options').appendChild(div);
   toggleType();
 }
 
-function formatDate(value) {
-  if (!value) return '';
-  return new Intl.DateTimeFormat('sv-SE', {day: 'numeric', month: 'short', year: 'numeric'})
-    .format(new Date(value + 'T12:00:00'));
+function formatDate(value) { return value || ''; }
+
+function isoDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function parseLocalDate(value) {
+  if (!value) return null;
+  const [y, m, d] = value.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// --- Middag / tillgänglighet: custom Monday-first date picker ---
+let availabilityCalendarMonth = new Date();
+availabilityCalendarMonth = new Date(availabilityCalendarMonth.getFullYear(), availabilityCalendarMonth.getMonth(), 1);
+let activeAvailabilityButton = null;
+
+function openAvailabilityCalendar(button) {
+  activeAvailabilityButton = button;
+  const value = button.parentElement.querySelector('input[name="dates"]').value;
+  const date = parseLocalDate(value);
+  if (date) availabilityCalendarMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  document.getElementById('availability-calendar-picker').classList.remove('hidden');
+  renderAvailabilityCalendar();
+}
+
+function closeAvailabilityCalendar() {
+  activeAvailabilityButton = null;
+  document.getElementById('availability-calendar-picker').classList.add('hidden');
+}
+
+function renderAvailabilityCalendar() {
+  const grid = document.getElementById('availability-calendar');
+  const title = document.getElementById('availability-calendar-month');
+  const year = availabilityCalendarMonth.getFullYear();
+  const month = availabilityCalendarMonth.getMonth();
+  title.textContent = new Intl.DateTimeFormat('sv-SE', { month: 'long', year: 'numeric' }).format(availabilityCalendarMonth);
+  grid.innerHTML = '';
+
+  const first = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const mondayIndex = (first.getDay() + 6) % 7;
+  for (let i = 0; i < mondayIndex; i++) {
+    const blank = document.createElement('div');
+    blank.className = 'calendar-day empty';
+    grid.appendChild(blank);
+  }
+
+  const selected = activeAvailabilityButton
+    ? activeAvailabilityButton.parentElement.querySelector('input[name="dates"]').value
+    : '';
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month, day);
+    const value = isoDate(date);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'calendar-day';
+    button.textContent = day;
+    if (value === selected) button.classList.add('range-start');
+    button.onclick = () => selectAvailabilityDate(value);
+    grid.appendChild(button);
+  }
+}
+
+function selectAvailabilityDate(value) {
+  if (!activeAvailabilityButton) return;
+  const row = activeAvailabilityButton.parentElement;
+  const input = row.querySelector('input[name="dates"]');
+  input.value = value;
+  activeAvailabilityButton.textContent = value;
+  activeAvailabilityButton.classList.add('has-value');
+  closeAvailabilityCalendar();
+}
+
+document.getElementById('availability-calendar-prev').addEventListener('click', () => {
+  availabilityCalendarMonth = new Date(availabilityCalendarMonth.getFullYear(), availabilityCalendarMonth.getMonth() - 1, 1);
+  renderAvailabilityCalendar();
+});
+document.getElementById('availability-calendar-next').addEventListener('click', () => {
+  availabilityCalendarMonth = new Date(availabilityCalendarMonth.getFullYear(), availabilityCalendarMonth.getMonth() + 1, 1);
+  renderAvailabilityCalendar();
+});
+
+// --- Hotell: custom Monday-first date range picker ---
+let calendarMonth = new Date();
+calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+
+function renderHotelCalendar() {
+  const grid = document.getElementById('hotel-calendar');
+  const title = document.getElementById('calendar-month');
+  const year = calendarMonth.getFullYear();
+  const month = calendarMonth.getMonth();
+  title.textContent = new Intl.DateTimeFormat('sv-SE', { month: 'long', year: 'numeric' }).format(calendarMonth);
+  grid.innerHTML = '';
+
+  const first = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const mondayIndex = (first.getDay() + 6) % 7;
+  for (let i = 0; i < mondayIndex; i++) {
+    const blank = document.createElement('div');
+    blank.className = 'calendar-day empty';
+    grid.appendChild(blank);
+  }
+
+  const startValue = document.getElementById('hotel_start_date').value;
+  const endValue = document.getElementById('hotel_end_date').value;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month, day);
+    const value = isoDate(date);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'calendar-day';
+    button.textContent = day;
+    if (value === startValue) button.classList.add('range-start');
+    if (value === endValue) button.classList.add('range-end');
+    if (startValue && endValue && value > startValue && value < endValue) button.classList.add('in-range');
+    button.onclick = () => selectHotelDate(value);
+    grid.appendChild(button);
+  }
+}
+
+function selectHotelDate(value) {
+  const start = document.getElementById('hotel_start_date');
+  const end = document.getElementById('hotel_end_date');
+  if (!start.value || (start.value && end.value)) {
+    start.value = value;
+    end.value = '';
+  } else if (value <= start.value) {
+    start.value = value;
+    end.value = '';
+  } else {
+    end.value = value;
+  }
+  updateHotelPreview();
+  renderHotelCalendar();
 }
 
 function updateHotelPreview() {
@@ -100,32 +264,45 @@ function updateHotelPreview() {
   const end = document.getElementById('hotel_end_date').value;
   const preview = document.getElementById('hotel-night-preview');
   if (!start || !end) {
-    preview.textContent = '';
+    preview.textContent = start ? `Incheckning: ${formatDate(start)} – välj utcheckningsdag` : '';
     return;
   }
-  const startDate = new Date(start + 'T12:00:00');
-  const endDate = new Date(end + 'T12:00:00');
+  const startDate = parseLocalDate(start);
+  const endDate = parseLocalDate(end);
   const nights = Math.round((endDate - startDate) / 86400000);
-  if (nights <= 0) {
-    preview.textContent = 'Utcheckning måste vara efter incheckning.';
-    return;
-  }
   preview.textContent = `${formatDate(start)} – ${formatDate(end)} · ${nights} nätter`;
 }
 
-document.getElementById('hotel_start_date').addEventListener('change', updateHotelPreview);
-document.getElementById('hotel_end_date').addEventListener('change', updateHotelPreview);
+document.getElementById('calendar-prev').addEventListener('click', () => {
+  calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+  renderHotelCalendar();
+});
+document.getElementById('calendar-next').addEventListener('click', () => {
+  calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+  renderHotelCalendar();
+});
 
 document.getElementById('poll-form').addEventListener('submit', function(event) {
-  if (document.getElementById('poll_type').value !== 'hotel') return;
-  const start = document.getElementById('hotel_start_date').value;
-  const end = document.getElementById('hotel_end_date').value;
-  if (!start || !end || end <= start) {
+  if (document.getElementById('poll_type').value === 'hotel') {
+    const start = document.getElementById('hotel_start_date').value;
+    const end = document.getElementById('hotel_end_date').value;
+    if (!start || !end || end <= start) {
+      event.preventDefault();
+      alert('Välj ett startdatum och ett stoppdatum där stoppdatumet är efter startdatumet.');
+    }
+    return;
+  }
+
+  const dateInputs = document.querySelectorAll('#options input[name="dates"]');
+  const missing = Array.from(dateInputs).some(input => !input.value);
+  if (missing) {
     event.preventDefault();
-    alert('Välj ett startdatum och ett stoppdatum där stoppdatumet är efter startdatumet.');
+    alert('Välj ett datum för varje alternativ.');
   }
 });
 
 addOption(); addOption(); addOption();
+renderHotelCalendar();
+renderAvailabilityCalendar();
 </script>
 {% endblock %}

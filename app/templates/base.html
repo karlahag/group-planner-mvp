@@ -5,12 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="/static/favicon.svg">
   <title>{% block title %}Group Planner{% endblock %}</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ app_version }}">
 </head>
 <body>
 <header class="topbar">
-  <a href="/" class="brand">Group Planner</a>
-  {% if app_version %}<span class="app-version">{{ app_version }}</span>{% endif %}
+  <a href="/" class="brand">Group Planner <span class="app-version">{{ app_version }}</span></a>
   {% if is_admin %}<div class="topbar-actions"><a href="/admin" class="button secondary">Omröstningar</a><a href="/admin/new" class="button secondary">Ny omröstning</a></div>{% else %}<div class="topbar-actions"><a href="/mine" class="button secondary">Mina omröstningar</a></div>{% endif %}
 </header>
 <main class="container">

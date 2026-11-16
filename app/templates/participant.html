@@ -1,46 +1,77 @@
-
 {% extends "base.html" %}
 {% block title %}{{ poll.title }}{% endblock %}
 {% block content %}
 <div class="hero">
   <h1>{{ poll.title }}</h1>
-  {% if poll.description %}<p class="lead">{{ poll.description }}</p>{% endif %}
+  {% if poll.description %}<p class="lead">{{ description_html(poll.description) }}</p>{% endif %}
 </div>
 
-{% if request.query_params.get('saved') %}
-<div class="success">✓ Dina svar är sparade. <a href="/mine">Visa mina omröstningar</a></div>
+{% if poll.locked %}
+<div class="warning lock-notice"><strong>🔒 Låst för ändring</strong><br>Den här omröstningen är låst. Kontakta admin om du behöver ändra dina val.</div>
 {% endif %}
 
-<form method="post" class="form">
+{% if request.query_params.get('saved') %}
+<div class="success">✓ Dina val är sparade.{% if not poll.locked %} De är nu låsta tills du väljer <strong>Ändra mina val</strong>.{% endif %}</div>
+{% elif participant and has_saved and not editing %}
+<div class="success">✓ Dina val är sparade.</div>
+{% endif %}
+
+<form method="post" class="form {% if not editing %}form-locked{% endif %}">
   <div class="card">
     <label>Ditt namn
-      <input name="name" required value="{{ participant.name if participant else '' }}" placeholder="T.ex. Thomas">
+      <input name="name" required value="{{ participant.name if participant else '' }}" placeholder="T.ex. Thomas" autocomplete="name" {% if not editing %}disabled{% endif %}>
     </label>
     <label>E-postadress
-      <input type="email" name="email" required value="{{ participant.email if participant else '' }}" placeholder="du@example.com" autocomplete="email">
+      <input type="text" inputmode="email" name="email" required value="{{ participant.email if participant else '' }}" placeholder="du@example.com" autocomplete="email" {% if not editing %}disabled{% endif %}>
       <div class="muted">E-postadressen används som din unika identifierare i omröstningen.</div>
     </label>
   </div>
+
+  {% if participant and has_saved and not editing %}
+  <div class="card saved-summary">
+    <div class="section-head">
+      <div>
+        <h2>Dina sparade val</h2>
+        {% if poll.locked %}
+        <div class="muted">Dina val är sparade. Omröstningen är låst för ändringar.</div>
+        {% else %}
+        <div class="muted">Dina val är sparade och låsta tills du väljer att ändra dem.</div>
+        {% endif %}
+      </div>
+      {% if not poll.locked %}
+      <a class="button" href="/p/{{ participant.token }}?edit=1">Ändra mina val</a>
+      {% else %}
+      <span class="button secondary disabled-button">Låst för ändring, kontakta admin</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 
   {% if poll.poll_type == 'hotel' %}
   <div class="card">
     <div class="section-head">
       <div>
         <h2>Vilka nätter vill du ha hotell?</h2>
-        <div class="muted">Tryck på de nätter du behöver. Du kan ändra och spara igen.</div>
+        <div class="muted">{% if editing %}Tryck på de nätter du behöver och spara sedan.{% else %}Dina sparade val visas nedan.{% endif %}</div>
       </div>
     </div>
     <div class="calendar">
       {% for o in options %}
-      <div class="day {% if existing.get(o.id) in ['selected','yes'] %}selected{% endif %}">
-        <div class="dow">{{ o.date[8:10] }}/{{ o.date[5:7] }}</div>
-        <div class="date">{{ o.date }}</div>
+      {% set selected = existing.get(o.id) in ['selected','yes'] %}
+      <div class="day {% if selected %}selected{% else %}unselected{% endif %} {% if not editing %}locked-option{% endif %}">
+        <div class="hotel-night-date">{{ format_hotel_night_sv(o.date) }}</div>
+        {% if editing %}
         <label>
           <input type="checkbox" name="answer_{{ o.id }}" value="selected"
-                 {% if existing.get(o.id) in ['selected','yes'] %}checked{% endif %}
+                 {% if selected %}checked{% endif %}
                  onchange="this.closest('.day').classList.toggle('selected',this.checked)">
           Övernattning
         </label>
+        {% elif selected %}
+        <div class="selected-mark">✓ Övernattning</div>
+        {% else %}
+        <div class="muted">Ej vald</div>
+        {% endif %}
       </div>
       {% endfor %}
     </div>
@@ -49,25 +80,127 @@
   <div class="card">
     <h2>När kan du?</h2>
     {% for o in options %}
-    <div class="participant-option">
+    {% set a = existing.get(o.id) %}
+    <div class="participant-option {% if not editing %}locked-option{% endif %} {% if a %}has-answer{% endif %}">
       <div class="slot-title">
-        <strong>{{ o.date }}</strong>
+        <strong>{{ format_date_iso(o.date) }}</strong>
         <span class="slot-time">{{ o.start_time }}–{{ o.end_time }}</span>
       </div>
+      {% if editing %}
       <div class="choices">
-        {% for value, label in [('yes','✓ Kan'),('maybe','? Kanske'),('no','✕ Kan inte')] %}
+        {% for value, label in [('yes','✅ Kan'),('no','❌ Kan inte')] %}
         <label class="choice">
           <input type="radio" name="answer_{{ o.id }}" value="{{ value }}"
-                 {% if existing.get(o.id) == value %}checked{% endif %}>
+                 {% if a == value %}checked{% endif %}>
           {{ label }}
         </label>
         {% endfor %}
       </div>
+      {% else %}
+      <div class="choices">
+        <span class="choice {% if a == 'yes' %}selected-choice{% endif %}">✅ Kan</span>
+        <span class="choice {% if a == 'no' %}selected-choice{% endif %}">❌ Kan inte</span>
+      </div>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
   {% endif %}
 
-  <button class="button" type="submit">Spara mina svar</button>
+  {% if editing %}
+  <button class="button" type="submit">Spara mina val</button>
+  {% endif %}
 </form>
+
+{% if participant and poll.poll_type == 'hotel' %}
+<div class="summary-grid participant-summary-grid">
+  <div class="stat"><span>Antal deltagare</span><strong>{{ all_participants|length }}</strong></div>
+  <div class="stat"><span>Gästnätter</span><strong>{{ selected_person_nights }}</strong></div>
+  <div class="stat"><span>Totalkostnad</span><strong>{% if poll.total_cost is not none %}{{ "%.2f"|format(poll.total_cost) }} kr{% else %}–{% endif %}</strong></div>
+  <div class="stat"><span>Kostnad/gästnatt</span><strong>{% if per_night_rate is not none %}{{ "%.0f"|format(per_night_rate) }} kr{% else %}–{% endif %}</strong></div>
+</div>
+<div class="card read-only-results">
+  <div class="section-head">
+    <div>
+      <h2>Resultat – {{ poll.title }}</h2>
+      <div class="muted">Här ser du allas val. ✓ = vald hotellnatt.</div>
+      <div class="result-cost-summary">
+        Du har valt <strong>{{ my_nights }} {{ 'gästnatt' if my_nights == 1 else 'gästnätter' }}</strong>.
+        {% if my_cost is not none %}Din aktuella kostnad är <strong>{{ "%.0f"|format(my_cost) }} kr</strong>.{% else %}Din kostnad kan beräknas när en totalkostnad är angiven.{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="table-wrap matrix-wrap">
+    <table class="result-matrix hotel-matrix">
+      <thead>
+        <tr>
+          <th class="sticky-corner">Person</th>
+          {% for o in options %}<th class="hotel-date-header">{{ format_hotel_night_weekdays_sv(o.date) }}<br><span class="hotel-date-compact">{{ format_hotel_night_compact_sv(o.date) }}</span></th>{% endfor %}
+          <th>Antal</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for p in all_participants %}
+        <tr>
+          <th class="sticky-person participant-result-name">{{ p.name }}{% if p.id == participant.id %} <span class="muted">(du)</span>{% endif %}</th>
+          {% set ns = namespace(person_nights=0) %}
+          {% for o in options %}
+            {% set a = all_response_map.get((p.id, o.id)) %}
+            {% if a in ['selected','yes'] %}{% set ns.person_nights = ns.person_nights + 1 %}{% endif %}
+            <td class="answer {{ a or '' }}">{% if a in ['selected','yes'] %}✓{% else %}–{% endif %}</td>
+          {% endfor %}
+          <td><strong>{{ ns.person_nights }}</strong></td>
+        </tr>
+      {% endfor %}
+      <tr class="matrix-summary">
+        <th class="sticky-person">Antal</th>
+        {% for o in options %}<td><strong>{{ hotel_counts.get(o.id, 0) }}</strong></td>{% endfor %}
+        <td><strong>{{ hotel_counts.values()|sum }}</strong></td>
+      </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% elif participant and poll.poll_type == 'availability' %}
+<div class="card read-only-results">
+  <div class="section-head">
+    <div>
+      <h2>Resultat – {{ poll.title }}</h2>
+      <div class="muted">Här ser du allas svar. ✅ = kan, ❌ = kan inte.</div>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Person</th>
+          {% for o in options %}<th class="{% if poll.booking_option_id == o.id %}booking-selected-column{% endif %}">{{ format_date_sv(o.date) }}<br><span class="muted">{{ o.start_time }}–{{ o.end_time }}</span>{% if poll.booking_option_id == o.id %}<br><span class="booking-mark">✓ Bokas</span>{% endif %}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for p in all_participants %}
+        <tr>
+          <th class="participant-result-name">{{ p.name }}{% if p.id == participant.id %} <span class="muted">(du)</span>{% endif %}</th>
+          {% for o in options %}
+            {% set a = all_response_map.get((p.id, o.id)) %}
+            <td class="answer {{ a or '' }} {% if poll.booking_option_id == o.id %}booking-selected-column{% endif %}">{% if a == 'yes' %}✅{% elif a == 'no' %}❌{% else %}–{% endif %}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if participant and has_saved and not editing %}
+<div class="actions bottom-actions">
+  {% if not poll.locked %}
+  <a class="button" href="/p/{{ participant.token }}?edit=1">Ändra mina val</a>
+  {% else %}
+  <span class="button secondary disabled-button">Låst för ändring, kontakta admin</span>
+  {% endif %}
+  <a class="button secondary" href="/mine">Till Mina omröstningar</a>
+</div>
+{% endif %}
 {% endblock %}

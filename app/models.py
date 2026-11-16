@@ -14,9 +14,11 @@ class Poll(Base):
     participant_token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     total_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
     cost_mode: Mapped[str] = mapped_column(String(30), default="per_night")
+    locked: Mapped[bool] = mapped_column(default=False)
+    booking_option_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("options.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    options = relationship("Option", back_populates="poll", cascade="all, delete-orphan")
+    options = relationship("Option", back_populates="poll", cascade="all, delete-orphan", foreign_keys="Option.poll_id")
     participants = relationship("Participant", back_populates="poll", cascade="all, delete-orphan")
 
 class Option(Base):
@@ -28,7 +30,7 @@ class Option(Base):
     start_time: Mapped[str | None] = mapped_column(String(5), nullable=True)
     end_time: Mapped[str | None] = mapped_column(String(5), nullable=True)
 
-    poll = relationship("Poll", back_populates="options")
+    poll = relationship("Poll", back_populates="options", foreign_keys=[poll_id])
     responses = relationship("Response", back_populates="option", cascade="all, delete-orphan")
 
 class Participant(Base):
@@ -39,6 +41,7 @@ class Participant(Base):
     name: Mapped[str] = mapped_column(String(100))
     email: Mapped[str] = mapped_column(String(320), default="", index=True)
     token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    saved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     poll = relationship("Poll", back_populates="participants")
     responses = relationship("Response", back_populates="participant", cascade="all, delete-orphan")
@@ -49,7 +52,7 @@ class Response(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     participant_id: Mapped[int] = mapped_column(ForeignKey("participants.id", ondelete="CASCADE"))
     option_id: Mapped[int] = mapped_column(ForeignKey("options.id", ondelete="CASCADE"))
-    answer: Mapped[str] = mapped_column(String(20))  # yes / no / maybe / selected
+    answer: Mapped[str] = mapped_column(String(20))  # yes / no / selected
 
     participant = relationship("Participant", back_populates="responses")
     option = relationship("Option", back_populates="responses")
